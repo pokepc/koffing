@@ -1,59 +1,41 @@
-import { Pokemon } from './Pokemon'
-import { PokemonTeam } from './PokemonTeam'
-import { PokemonTeamSet } from './PokemonTeamSet'
-import { ShowdownParser } from './ShowdownParser'
+import { Pokemon } from "./Pokemon";
+import { PokemonTeam } from "./PokemonTeam";
+import { PokemonTeamSet } from "./PokemonTeamSet";
+import { ShowdownParser } from "./ShowdownParser";
+import { record } from "./validation";
 
-type DataType = string | Pokemon | PokemonTeam | PokemonTeamSet | ShowdownParser
+export type KoffingModel = Pokemon | PokemonTeam | PokemonTeamSet;
+export type KoffingInput = string | KoffingModel | ShowdownParser;
 
 export class Koffing {
-  /**
-   * Converts from Showdown to a PokemonTeamSet object.
-   */
-  static parse(data: DataType): Pokemon | PokemonTeam | PokemonTeamSet {
-    if (
-      data instanceof PokemonTeamSet ||
-      data instanceof PokemonTeam ||
-      data instanceof Pokemon
-    ) {
-      return data
-    }
-    if (data instanceof ShowdownParser) {
-      return data.parse()
-    }
-    return new ShowdownParser(data).parse()
+  static parse(data: string | ShowdownParser): PokemonTeamSet;
+  static parse<T extends KoffingModel>(data: T): T;
+  static parse(data: KoffingInput): KoffingModel;
+  static parse(data: KoffingInput): KoffingModel {
+    if (data instanceof Pokemon || data instanceof PokemonTeam || data instanceof PokemonTeamSet)
+      return data;
+    return (data instanceof ShowdownParser ? data : new ShowdownParser(data)).parse();
   }
 
-  /**
-   * Prettifies and sanitizes the given Showdown code.
-   */
-  static format(data: DataType): string {
-    return this.parse(data).toShowdown()
+  static format(data: KoffingInput): string {
+    return this.parse(data).toShowdown();
+  }
+  static toJson(data: KoffingInput): string {
+    return this.parse(data).toJson();
   }
 
-  /**
-   * Converts from Showdown to JSON code.
-   */
-  static toJson(data: DataType): string {
-    return this.parse(data).toJson()
-  }
-
-  /**
-   * Converts from JSON string or JSON object to Showdown code.
-   */
-  static toShowdown(data: DataType | object): string {
-    if (
-      data instanceof PokemonTeamSet ||
-      data instanceof PokemonTeam ||
-      data instanceof Pokemon
-    ) {
-      return data.toShowdown()
-    }
-    if (data instanceof ShowdownParser) {
-      return data.parse().toShowdown()
-    }
-    if (typeof data === 'string') {
-      data = JSON.parse(data)
-    }
-    return PokemonTeamSet.fromObject(data as object).toShowdown()
+  /** Accepts JSON for a Pokémon, a team, or a collection of teams. */
+  static toShowdown(data: unknown): string {
+    if (data instanceof Pokemon || data instanceof PokemonTeam || data instanceof PokemonTeamSet)
+      return data.toShowdown();
+    if (data instanceof ShowdownParser) return data.parse().toShowdown();
+    const source = record(
+      typeof data === "string" ? (JSON.parse(data) as unknown) : data,
+      "Koffing JSON",
+    );
+    if ("teams" in source) return PokemonTeamSet.fromObject(source).toShowdown();
+    if ("pokemon" in source) return PokemonTeam.fromObject(source).toShowdown();
+    if ("name" in source) return Pokemon.fromObject(source).toShowdown();
+    throw new TypeError("Koffing JSON must contain teams, pokemon, or a Pokémon name");
   }
 }

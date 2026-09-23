@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"],
+    "paths": { "koffing": ["../../packages/koffing/src/index.ts"] }
+  },
+  "include": ["src", "vite.config.ts"]
+}

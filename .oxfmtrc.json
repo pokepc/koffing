@@ -1,0 +1,3 @@
+{
+  "ignorePatterns": [".local/**", "**/dist/**", "pnpm-lock.yaml"]
+}

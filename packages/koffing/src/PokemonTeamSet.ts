@@ -1,37 +1,27 @@
-import { PokemonTeam } from './PokemonTeam'
+import { PokemonTeam } from "./PokemonTeam";
+import { list, record } from "./validation";
 
 export class PokemonTeamSet {
-  teams: PokemonTeam[]
+  teams: PokemonTeam[];
 
   constructor(teams: PokemonTeam[] = []) {
-    this.teams = teams
+    this.teams = teams;
   }
 
-  static fromObject(obj: PokemonTeamSet | Record<string, any>): PokemonTeamSet {
-    const teamSet = new PokemonTeamSet()
-    teamSet.teams = obj.teams
-      ? obj.teams.map(function (team: PokemonTeam | Record<string, any>) {
-          return PokemonTeam.fromObject(team)
-        })
-      : []
-
-    return teamSet
+  static fromObject(value: unknown): PokemonTeamSet {
+    const source = record(value, "PokemonTeamSet");
+    return new PokemonTeamSet(
+      list(source.teams, "PokemonTeamSet.teams").map(PokemonTeam.fromObject),
+    );
   }
 
   toJson(indentation = 2): string {
-    return JSON.stringify(this, null, indentation)
+    return JSON.stringify(this, null, indentation);
   }
-
   toShowdown(): string {
-    return this.teams
-      .map(function (p) {
-        return p.toString()
-      })
-      .join('\n\n')
-      .trim()
+    return this.teams.map((team) => team.toShowdown()).join("\n\n");
   }
-
   toString(): string {
-    return this.toShowdown()
+    return this.toShowdown();
   }
 }

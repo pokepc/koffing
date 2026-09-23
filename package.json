@@ -1,28 +1,22 @@
 {
-  "name": "koffing-monorepo-root",
-  "version": "1.0.0",
+  "name": "koffing-workspace",
   "private": true,
+  "type": "module",
   "scripts": {
-    "prepare": "husky install",
-    "dev": "turbo run dev --no-cache --parallel --continue",
-    "lint": "TIMING=1 eslint \"**/*.{ts,tsx}\"",
-    "lint:ci": "pnpm run lint",
-    "build": "turbo run build",
-    "build:ci": "turbo run build:ci",
-    "test": "turbo run test --concurrency=1",
-    "test:ci": "turbo run test:ci --concurrency=1",
-    "ci": "pnpm lint:ci && pnpm build:ci && pnpm test:ci",
-    "format": "prettier --write \"**/*.{astro,js,jsx,ts,tsx,css,scss,md,mdx,yml,yaml,xml,toml,json}\""
+    "dev": "pnpm --filter @koffing/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter koffing test",
+    "typecheck": "pnpm -r typecheck",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
-    "@packages/preset-eslint": "workspace:^",
-    "@packages/preset-prettier": "workspace:^",
-    "@packages/preset-ts": "workspace:^",
-    "husky": "^8.0.3",
-    "turbo": "^1.10.12"
+    "oxfmt": "^0.70.0",
+    "typescript": "^7.0.2"
   },
-  "packageManager": "pnpm@8.6.12",
   "engines": {
-    "node": ">=18.5.0"
-  }
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@12.5.1"
 }

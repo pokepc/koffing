@@ -1,53 +1,42 @@
-import { Pokemon } from './Pokemon'
+import { Pokemon } from "./Pokemon";
+import { list, record, text } from "./validation";
 
 export class PokemonTeam {
-  name: string
-  format: string
-  folder: string | undefined
-  pokemon: Pokemon[] = []
+  name: string;
+  format: string;
+  folder?: string;
+  pokemon: Pokemon[] = [];
 
-  constructor(
-    format = 'gen9',
-    name = 'Untitled',
-    folder: string | undefined = undefined
-  ) {
-    this.name = name
-    this.format = format
-    this.folder = folder
+  constructor(format = "gen9", name = "Untitled", folder?: string) {
+    this.format = format;
+    this.name = name;
+    this.folder = folder;
   }
 
-  static fromObject(obj: PokemonTeam | Record<string, any>): PokemonTeam {
-    const team = new PokemonTeam()
-    team.name = obj.name
-    team.format = obj.format
-    team.folder = obj.folder
-    team.pokemon = obj.pokemon
-      ? obj.pokemon.map(function (pokemon: Pokemon | Record<string, any>) {
-          return Pokemon.fromObject(pokemon)
-        })
-      : []
-
-    return team
+  static fromObject(value: unknown): PokemonTeam {
+    const source = record(value, "PokemonTeam");
+    const team = new PokemonTeam(
+      text(source.format, "PokemonTeam.format"),
+      text(source.name, "PokemonTeam.name"),
+      text(source.folder, "PokemonTeam.folder"),
+    );
+    team.pokemon = list(source.pokemon, "PokemonTeam.pokemon").map(Pokemon.fromObject);
+    return team;
   }
 
   toJson(indentation = 2): string {
-    return JSON.stringify(this, null, indentation)
+    return JSON.stringify(this, null, indentation);
   }
 
   toShowdown(): string {
-    const name = this.folder ? `${this.folder}/${this.name}` : this.name
-    let str = `=== [${this.format}] ${name} ===\n\n`
-
-    str += this.pokemon
-      .map(function (p) {
-        return p.toString()
-      })
-      .join('\n\n')
-
-    return str.trim()
+    const title = this.folder ? `${this.folder}/${this.name}` : this.name;
+    return [
+      `=== [${this.format}] ${title} ===`,
+      ...this.pokemon.map((pokemon) => pokemon.toShowdown()).filter(Boolean),
+    ].join("\n\n");
   }
 
   toString(): string {
-    return this.toShowdown()
+    return this.toShowdown();
   }
 }

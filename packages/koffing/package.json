@@ -1,37 +1,43 @@
 {
   "name": "koffing",
   "version": "1.0.0",
-  "repository": {
-    "url": "https://github.com/itsjavi/koffing",
-    "type": "git"
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "module": "./dist/index.mjs",
+  "description": "A typed Pokémon Showdown team parser and formatter.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/itsjavi/koffing",
+    "directory": "packages/koffing"
+  },
   "files": [
-    "./dist/*",
+    "dist",
     "README.md",
     "LICENSE"
   ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
   "scripts": {
-    "dev": "tsup src/index.ts --format=esm,cjs --watch --dts --external react",
-    "lint": "TIMING=1 eslint \"**/*.ts*\"",
-    "lint:ci": "pnpm run lint",
-    "build": "tsup src/index.ts --format=esm,cjs --dts --external react",
-    "build:ci": "pnpm run build",
-    "test": "jest --verbose --coverage --coverageDirectory=.coverage",
-    "test:ci": "jest --runInBand --ci --coverage --coverageDirectory=.coverage"
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@packages/preset-eslint": "workspace:^",
-    "@packages/preset-prettier": "workspace:^",
-    "@packages/preset-ts": "workspace:^",
-    "@types/jest": "^29.5.3",
-    "@types/node": "^20.4.7",
-    "jest": "^29.6.2",
-    "ts-jest": "^29.1.1",
-    "tsup": "^7.2.0",
-    "typescript": "^5.1.6"
+    "@types/node": "^26.6.2",
+    "tsdown": "^0.23.0",
+    "vitest": "^5.0.1"
   }
 }

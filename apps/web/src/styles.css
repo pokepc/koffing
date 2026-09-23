@@ -1,0 +1,234 @@
+@layer base, layout, components;
+
+@layer base {
+  :root {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    color: #292a32;
+    background: #fafafa;
+    color-scheme: light;
+    font-synthesis: none;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+  }
+  button,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button,
+  select {
+    border: 1px solid #d4d4e3;
+    border-radius: 7px;
+    background: #fff;
+    color: inherit;
+    padding: 0.6rem 0.85rem;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  button:not(:disabled):hover {
+    background: #ededf7;
+  }
+  :focus-visible {
+    outline: 2px solid #54569a;
+    outline-offset: 4px;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+}
+@layer layout {
+  main {
+    width: min(1680px, 100%);
+    margin-inline: auto;
+    padding: 0 clamp(1rem, 3vw, 3rem) 2rem;
+  }
+  .masthead,
+  .workspace-toolbar,
+  .editor-heading,
+  .editor-actions,
+  footer,
+  .format-control {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .masthead,
+  .workspace-toolbar,
+  .editor-heading,
+  footer {
+    justify-content: space-between;
+  }
+  .masthead {
+    position: relative;
+    padding-block: 1rem;
+    margin-bottom: 2rem;
+    color: #fff;
+    background: #7072b8;
+    box-shadow: 0 0 0 100vmax #7072b8;
+    clip-path: inset(0 -100vmax);
+  }
+  .workspace-toolbar {
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .format-control {
+    flex-wrap: wrap;
+  }
+  .editors {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+  footer {
+    border-top: 1px solid #dedee8;
+    padding-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 760px) {
+    .editors {
+      grid-template-columns: 1fr;
+    }
+    .local-note {
+      display: none;
+    }
+    .format-control {
+      gap: 0.65rem;
+    }
+  }
+}
+@layer components {
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+  .koffing-sprite {
+    flex-shrink: 0;
+    object-fit: contain;
+    image-rendering: pixelated;
+    animation: float 700ms ease-in-out infinite alternate;
+  }
+  @keyframes float {
+    to {
+      transform: translate(-2px, -3px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .koffing-sprite {
+      animation: none;
+    }
+  }
+  .masthead > a:last-child {
+    flex-shrink: 0;
+    font-size: 0.85rem;
+  }
+  footer,
+  .summary,
+  .format-control label {
+    color: #606170;
+    font-size: 0.85rem;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(1rem, 2vw, 1.4rem);
+    line-height: 1.4;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+  .editor {
+    border: 1px solid #e0e0e8;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 2px 5px #2525380a;
+  }
+  .editor-heading {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e0e0e8;
+    font-size: 0.9rem;
+  }
+  textarea {
+    display: block;
+    width: 100%;
+    min-height: 520px;
+    resize: vertical;
+    border: 0;
+    padding: 1.4rem;
+    background: transparent;
+    color: #30311f;
+    font:
+      0.85rem/1.8 ui-monospace,
+      SFMono-Regular,
+      Consolas,
+      monospace;
+    tab-size: 2;
+    border-radius: 0;
+  }
+  #input {
+    background: #f7f99c;
+  }
+  #output {
+    background: #fafafa;
+    color: #287424;
+  }
+  textarea::placeholder {
+    color: #6a6b53;
+  }
+  textarea:focus-visible {
+    outline-offset: -3px;
+  }
+  .editor-actions {
+    min-height: 4.7rem;
+    padding: 1rem;
+    border-top: 1px solid #e0e0e8;
+    font-size: 0.8rem;
+    flex-wrap: wrap;
+  }
+  .quiet {
+    background: transparent;
+    border-color: transparent;
+  }
+  .example,
+  .local-note {
+    margin-left: auto;
+  }
+  .local-note {
+    color: #606170;
+    font-size: 0.7rem;
+  }
+  .primary {
+    background: #6567ab;
+    color: #fff;
+    border-color: #6567ab;
+    font-weight: 650;
+  }
+  .primary:not(:disabled):hover {
+    background: #545694;
+  }
+  .notice {
+    min-height: 1.5rem;
+    color: #545694;
+    font-size: 0.85rem;
+  }
+  .error {
+    color: #902929;
+    background: #fff0f0;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-wrap: anywhere;
+  }
+}

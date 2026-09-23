@@ -1,8 +1,5 @@
 {
-  "extends": "@packages/preset-ts/tsconfig/ts-library.json",
-  "include": ["./src"],
-  "exclude": ["dist", "build", "node_modules"],
-  "compilerOptions": {
-    "types": ["node", "jest"]
-  }
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "isolatedDeclarations": true, "declaration": true, "types": ["node"] },
+  "include": ["src", "test", "tsdown.config.ts", "vitest.config.ts"]
 }

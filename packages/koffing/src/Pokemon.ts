@@ -1,158 +1,130 @@
-export type PokemonStats = {
-  hp: number
-  atk: number
-  def: number
-  spa: number
-  spd: number
-  spe: number
+import { flag, list, number, record, text } from "./validation";
+
+export type PokemonGender = "M" | "F";
+export type PokemonStat = "hp" | "atk" | "def" | "spa" | "spd" | "spe";
+export type PokemonStats = Partial<Record<PokemonStat, number>>;
+
+const stats: readonly [PokemonStat, string][] = [
+  ["hp", "HP"],
+  ["atk", "Atk"],
+  ["def", "Def"],
+  ["spa", "SpA"],
+  ["spd", "SpD"],
+  ["spe", "Spe"],
+];
+
+function readStats(value: unknown, label: string, maximum: number): PokemonStats | undefined {
+  if (value === undefined) return undefined;
+  const source = record(value, label);
+  const result: PokemonStats = {};
+  for (const [key] of stats) {
+    const stat = number(source[key], `${label}.${key}`, 0, maximum);
+    if (stat !== undefined) result[key] = stat;
+  }
+  return Object.keys(result).length ? result : undefined;
 }
 
-export type PokemonGender = 'M' | 'F'
-
-const POKEMON_STAT_NAMES = ['HP', 'Atk', 'Def', 'SpA', 'SpD', 'Spe']
-
+/** A single Pokémon set. Missing values remain absent in JSON and Showdown output. */
 export class Pokemon {
-  name: string | undefined
-  nickname: string | undefined
-  gender: PokemonGender | undefined
-  item: string | undefined
-  pokeball: string | undefined
-  ability: string | undefined
-  level: number | undefined
-  shiny: boolean | undefined
-  happiness: number | undefined
-  nature: string | undefined
-  evs: PokemonStats | undefined
-  ivs: PokemonStats | undefined
-  dynamaxLevel: number | undefined
-  gigantamax: boolean | undefined
-  teraType: string | undefined
-  moves: string[] = []
+  name?: string;
+  nickname?: string;
+  gender?: PokemonGender;
+  item?: string;
+  pokeball?: string;
+  ability?: string;
+  level?: number;
+  shiny?: boolean;
+  happiness?: number;
+  nature?: string;
+  evs?: PokemonStats;
+  ivs?: PokemonStats;
+  dynamaxLevel?: number;
+  gigantamax?: boolean;
+  teraType?: string;
+  moves: string[] = [];
 
-  static fromObject(obj: Pokemon | Record<string, any>): Pokemon {
-    const p = new Pokemon()
-    p.name = obj.name
-    p.nickname = obj.nickname
-    p.gender = obj.gender
-    p.item = obj.item
-    p.ability = obj.ability
-    p.level = obj.level
-    p.shiny = obj.shiny
-    p.happiness = obj.happiness
-    p.nature = obj.nature
-    p.evs = obj.evs
-    p.ivs = obj.ivs
-    p.teraType = obj.teraType
-    p.dynamaxLevel = obj.dynamaxLevel
-    p.gigantamax = obj.gigantamax
-    p.pokeball = obj.pokeball
-    p.moves = Array.isArray(obj.moves) ? obj.moves : []
-
-    return p
+  static fromObject(value: unknown): Pokemon {
+    const source = record(value, "Pokemon");
+    const pokemon = new Pokemon();
+    for (const key of [
+      "name",
+      "nickname",
+      "item",
+      "pokeball",
+      "ability",
+      "nature",
+      "teraType",
+    ] as const) {
+      const field = text(source[key], `Pokemon.${key}`);
+      if (field !== undefined) pokemon[key] = field;
+    }
+    if (!pokemon.name) throw new TypeError("Pokemon.name is required");
+    if (source.gender !== undefined) {
+      const gender = text(source.gender, "Pokemon.gender")?.toUpperCase();
+      if (gender !== "M" && gender !== "F") throw new TypeError("Pokemon.gender must be M or F");
+      pokemon.gender = gender;
+    }
+    pokemon.level = number(source.level, "Pokemon.level", 1, 100);
+    pokemon.happiness = number(source.happiness, "Pokemon.happiness", 0, 255);
+    pokemon.dynamaxLevel = number(source.dynamaxLevel, "Pokemon.dynamaxLevel", 0, 10);
+    pokemon.shiny = flag(source.shiny, "Pokemon.shiny");
+    pokemon.gigantamax = flag(source.gigantamax, "Pokemon.gigantamax");
+    pokemon.evs = readStats(source.evs, "Pokemon.evs", 255);
+    pokemon.ivs = readStats(source.ivs, "Pokemon.ivs", 31);
+    if (source.moves !== undefined) {
+      pokemon.moves = list(source.moves, "Pokemon.moves")
+        .map((move) => {
+          const result = text(move, "Pokemon.moves[]");
+          if (!result) throw new TypeError("Pokemon.moves[] cannot be empty");
+          return result;
+        })
+        .slice(0, 4);
+    }
+    return pokemon;
   }
 
   toJson(indentation = 2): string {
-    return JSON.stringify(this, null, indentation)
+    return JSON.stringify(this, null, indentation);
   }
 
   toShowdown(): string {
-    let str = ''
-
-    if (this.nickname) {
-      str += `${this.nickname} (${this.name})`
-    } else {
-      str += `${this.name}`
-    }
-
-    if (this.gender && this.gender.match(/^[MF]$/i)) {
-      str += ` (${this.gender.toUpperCase()})`
-    }
-
-    if (this.item) {
-      str += ` @ ${this.item}`
-    }
-
-    str += '\n'
-
-    if (this.ability) {
-      str += `Ability: ${this.ability}\n`
-    }
-
-    if (!Number.isNaN(this.level)) {
-      str += `Level: ${this.level}\n`
-    }
-
-    if (this.shiny === true) {
-      str += `Shiny: Yes\n`
-    }
-
-    if (!Number.isNaN(this.happiness)) {
-      str += `Happiness: ${this.happiness}\n`
-    }
-
-    if (this.pokeball) {
-      str += `Pokeball: ${this.pokeball}\n`
-    }
-
-    if (!Number.isNaN(this.dynamaxLevel)) {
-      str += `Dynamax Level: ${this.dynamaxLevel}\n`
-    }
-
-    if (this.gigantamax === true) {
-      str += `Gigantamax: Yes\n`
-    }
-
-    if (this.teraType) {
-      str += `Tera Type: ${this.teraType}\n`
-    }
-
-    if (this.evs) {
-      const evs = this.evs as Record<string, number>
-      str +=
-        `EVs: ` +
-        POKEMON_STAT_NAMES.filter(function (prop) {
-          return !isNaN(evs[prop.toLowerCase()])
-        })
-          .map(function (prop) {
-            const val = evs[prop.toLowerCase()]
-            return `${val} ${prop}`
-          })
-          .join(' / ') +
-        '\n'
-    }
-
-    if (this.nature) {
-      str += `${this.nature} Nature\n`
-    }
-
-    if (this.ivs) {
-      const ivs = this.ivs as Record<string, number>
-      str +=
-        `IVs: ` +
-        POKEMON_STAT_NAMES.filter(function (prop) {
-          return !isNaN(ivs[prop.toLowerCase()])
-        })
-          .map(function (prop) {
-            const val = ivs[prop.toLowerCase()]
-            return `${val} ${prop}`
-          })
-          .join(' / ') +
-        '\n'
-    }
-
-    if (this.moves) {
-      str +=
-        this.moves
-          .map(function (move) {
-            return `- ${move}`
-          })
-          .join('\n') + '\n'
-    }
-
-    return str.trim()
+    if (!this.name) return "";
+    let title = this.nickname ? `${this.nickname} (${this.name})` : this.name;
+    if (this.gender) title += ` (${this.gender})`;
+    if (this.item) title += ` @ ${this.item}`;
+    const lines = [title];
+    const append = (label: string, value: string | number | undefined): void => {
+      if (
+        value !== undefined &&
+        value !== "" &&
+        (typeof value !== "number" || Number.isFinite(value))
+      ) {
+        lines.push(`${label}: ${value}`);
+      }
+    };
+    append("Ability", this.ability);
+    append("Level", this.level);
+    if (this.shiny) lines.push("Shiny: Yes");
+    append("Happiness", this.happiness);
+    append("Pokeball", this.pokeball);
+    append("Dynamax Level", this.dynamaxLevel);
+    if (this.gigantamax) lines.push("Gigantamax: Yes");
+    append("Tera Type", this.teraType);
+    const appendStats = (label: string, values: PokemonStats | undefined): void => {
+      const entries = stats.flatMap(([key, name]) => {
+        const value = values?.[key];
+        return value !== undefined && Number.isFinite(value) ? [`${value} ${name}`] : [];
+      });
+      if (entries.length) lines.push(`${label}: ${entries.join(" / ")}`);
+    };
+    appendStats("EVs", this.evs);
+    if (this.nature) lines.push(`${this.nature} Nature`);
+    appendStats("IVs", this.ivs);
+    lines.push(...this.moves.slice(0, 4).map((move) => `- ${move}`));
+    return lines.join("\n");
   }
 
   toString(): string {
-    return this.toShowdown()
+    return this.toShowdown();
   }
 }
