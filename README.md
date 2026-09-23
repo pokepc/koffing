@@ -44,6 +44,8 @@ The HTML preserves the original site's title and description, and includes the K
 
 ## Library
 
+See the [syntax and data fields reference](docs/syntax.md) for text examples, supported properties, aliases, and JSON shapes.
+
 ```ts
 import { parse, exportTeams } from "koffing";
 
@@ -62,6 +64,6 @@ The core uses pure functions and Showdown-shaped sets: `species` identifies the 
 
 Parsing preserves supported numeric values and extra moves. It reports unknown syntax, repeated fields, and suspicious values instead of silently correcting them. `validateTeam` provides generic sanity diagnostics; `sanitizeTeam` is an explicit, non-mutating operation. Strict mode rejects diagnostics. These checks require no game database and do not establish legality. Packed team strings are explicitly unsupported. See [the library README](packages/koffing/README.md) for the API, limits, compatibility contract, and examples.
 
-The previous class API and `name`/`nickname` schema were intentionally removed; this is a breaking rewrite. The runtime has no dependencies. The official `pokemon-showdown` package is development-only, used for differential tests and benchmarks. Its reference release and commit are recorded in `packages/koffing/test/upstream.json` and the frozen lockfile. Database-backed species normalization and competitive legality remain outside Koffing's scope.
+The previous class API and `name`/`nickname` schema were intentionally removed; this is a breaking rewrite. The runtime has no dependencies. The optional `koffing/validator` entry point checks field types, integers, identifiers, and basic team rules using generated JSON lookup tables. The official `pokemon-showdown` package is development-only, used for differential tests, benchmarks, and lookup generation. Its reference release and commit are recorded in `packages/koffing/test/upstream.json` and the frozen lockfile. Species normalization and full competitive legality remain outside Koffing's scope.
 
 MIT licensed. Pokémon is a trademark of its respective owners; this project is unaffiliated.
