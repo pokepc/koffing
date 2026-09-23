@@ -28,10 +28,22 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./validator": {
+      "import": {
+        "types": "./dist/validator.d.ts",
+        "default": "./dist/validator.js"
+      },
+      "require": {
+        "types": "./dist/validator.d.cts",
+        "default": "./dist/validator.cjs"
+      }
     }
   },
   "scripts": {
     "build": "tsdown",
+    "lookups:generate": "node scripts/dump-identifiers.mjs",
+    "lookups:check": "node scripts/dump-identifiers.mjs --check",
     "test": "vitest run",
     "bench": "vitest bench --run --reporter=verbose",
     "typecheck": "tsc -p tsconfig.json"

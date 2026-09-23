@@ -43,7 +43,25 @@ Strict mode throws on diagnostics. Unsafe JSON structures, unrepresentable expor
 
 ## Parser scope and safety
 
-Koffing retains generic sanity diagnostics for traditional numeric ranges, EV totals, and move counts. These checks do not use a game database. Species, moves, abilities, items, natures, balls, and types are open strings: new names do not require database updates or a Koffing release. New text syntax or fields may still require parser support. Game-database normalization, learnsets, and format legality belong in a separate consumer or a future package such as `koffing-validator`; that package is not implemented here.
+Koffing retains generic sanity diagnostics for traditional numeric ranges, EV totals, and move counts. These parser checks do not use a game database. Species, moves, abilities, items, natures, balls, and types remain open strings when parsing. New text syntax or fields may still require parser support. The optional `koffing/validator` entry point adds snapshot-based identifier checks; learnsets and format legality remain outside its scope.
+
+### Optional identifier and basic legality validation
+
+```ts
+import { parse } from "koffing";
+import { validate } from "koffing/validator";
+
+const parsed = parse("Koffing @ Eviolite\nAbility: Levitate\n- Sludge Bomb");
+const result = validate({ teams: parsed.teams });
+console.log(result.valid, result.diagnostics);
+// Also accepts a set, set array, team wrapper, or JSON string, like parseJSON.
+```
+
+This separate entry point keeps lookup data out of the core parser bundle. `validate(input, options?)` accepts unknown data without coercion or mutation and returns `{ valid, diagnostics }`. It checks runtime field types, known fields, finite integers, level 1–100, happiness 0–255, Dynamax level 0–10, IVs 0–31, EVs 0–255 with a 510 total, one to six Pokémon per team, and one to four distinct moves. EVs retain the historical 255 cap because no generation is assumed. Missing optional fields and empty optional strings remain unspecified. Shape failures return the first error; other checks can return multiple errors. Strict mode throws on diagnostics; resource-limit violations always throw. Inspect parser diagnostics separately when validating parsed text.
+
+Species, moves, items, abilities, natures, balls, Hidden Power types, and Tera types are checked against committed JSON tables. Display names and lowercase alphanumeric IDs compare equivalently; aliases are not resolved. Balls must be ball items; Hidden Power excludes Normal, Fairy, and Stellar. Typed Hidden Power variants count as one move for duplicate checks. Snapshot identifiers include past and nonstandard Showdown entries. A passing result is only a basic sanity check: it does not prove obtainability, species/ability compatibility, learnsets, event restrictions, generation availability, battle-form eligibility, or format legality. Species/item clauses and generation-specific EV rules are intentionally not imposed.
+
+Run `pnpm --filter koffing lookups:generate` to dump sorted, deduplicated IDs from the lockfile-pinned development-only `pokemon-showdown` dependency into `src/lookups/*.json`; `source.json` records its version and scope. `pnpm --filter koffing lookups:check` detects stale tables without writing. Review and commit regenerated files when updating Showdown. Runtime validation has no Showdown dependency or network requests.
 
 ### Validation and explicit sanitization
 
@@ -77,6 +95,6 @@ Object entry points accept ordinary data objects and reject accessor properties 
 
 The compatibility target is Showdown's exported text and sparse `PokemonSet` shape. Koffing retains backup metadata separately. Formatting need not be byte-identical to Showdown: explicit defaults can remain visible and harmless whitespace differs. Species aliases, generation-specific defaults, Hidden Power IV inference, and legality checks require game data and are intentionally not inferred by the core. Call a game-data resolver or Showdown validator separately when needed.
 
-Differential tests compare supported semantic behavior with the official server implementation. The development-only reference version and source commit are recorded in `test/upstream.json`, and `pnpm-lock.yaml` fixes its installation. This reference is only a test oracle, never a source of runtime ID tables or legality rules. Updating the reference requires reviewing its expectations. Additional tests cover client syntax, old fixtures, malformed inputs, limits, serialization boundaries, and round trips. There are no web app tests.
+Differential tests compare supported semantic behavior with the official server implementation. The development-only reference version and source commit are recorded in `test/upstream.json`, and `pnpm-lock.yaml` fixes its installation. This dependency also supplies the optional validator's generated ID tables. Updating the reference requires reviewing its expectations and regenerating those tables. Additional tests cover client syntax, old fixtures, malformed inputs, limits, serialization boundaries, optional validation, and round trips. There are no web app tests.
 
 Run `pnpm test` for tests and `pnpm bench` for Vitest benchmarks. Benchmarks cover normal teams, large backups, and malformed long lines; they are observations rather than CI speed thresholds. Upstream and Koffing perform different validation and metadata work, so throughput is not a like-for-like measure of every feature.

@@ -1,0 +1,5 @@
+{
+  "package": "pokemon-showdown",
+  "version": "0.11.11",
+  "scope": "All existing identifiers in the default Dex, including past and nonstandard entries; no aliases or format legality."
+}
