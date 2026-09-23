@@ -23,6 +23,7 @@ The web app resolves the library source directly, so development needs no prelim
 pnpm build         # Library and web production builds
 pnpm typecheck     # TypeScript 7 across both packages
 pnpm test          # Library tests with Vitest; no app tests
+pnpm bench         # Parser/export benchmarks, including the pinned Showdown reference
 pnpm format       # Format with oxfmt
 pnpm check        # Formatting, types, library tests, and builds
 ```
@@ -44,20 +45,23 @@ The HTML preserves the original site's title and description, and includes the K
 ## Library
 
 ```ts
-import { Koffing } from "koffing";
+import { parse, exportTeams } from "koffing";
 
-const team = Koffing.parse(`Koffing @ Eviolite
+const result = parse(`Koffing @ Eviolite
 Ability: Levitate
 Bold Nature
 - Will-O-Wisp`);
 
-const json = team.toJson();
-const showdown = Koffing.toShowdown(json);
-const formatted = Koffing.format(showdown);
+console.log(result.teams[0]?.pokemon[0]?.species); // Koffing
+console.log(result.diagnostics); // Always review parsing issues
+const json = JSON.stringify({ teams: result.teams }, null, 2);
+const showdown = exportTeams(result.teams);
 ```
 
-`Pokemon`, `PokemonTeam`, `PokemonTeamSet`, and `ShowdownParser` are also exported. Team exports can contain `=== [format] Folder/Team name ===` headers or individual Pokémon separated by blank lines. Formatting normalizes supported fields; it does not validate species, moves, abilities, or competitive team legality against a game database.
+The core uses pure functions and Showdown-shaped sets: `species` identifies the Pokémon, and optional `name` is its nickname. `parseJSON` accepts a set, a plain set array, a team wrapper, or a `{ teams }` collection. Team exports can contain `=== [format] Folder/Team name ===` headers or individual Pokémon separated by blank lines.
 
-The rewrite preserves the main class API and JSON shape. It fixes absent numeric fields being printed as `undefined` and team headers moving Pokémon into the wrong team. Malformed JSON data now reports errors instead of being silently accepted.
+Parsing preserves supported numeric values and extra moves. It reports unknown syntax, repeated fields, and suspicious values instead of silently correcting them. `validateTeam` provides generic sanity diagnostics; `sanitizeTeam` is an explicit, non-mutating operation. Strict mode rejects diagnostics. These checks require no game database and do not establish legality. Packed team strings are explicitly unsupported. See [the library README](packages/koffing/README.md) for the API, limits, compatibility contract, and examples.
+
+The previous class API and `name`/`nickname` schema were intentionally removed; this is a breaking rewrite. The runtime has no dependencies. The official `pokemon-showdown` package is development-only, used for differential tests and benchmarks. Its reference release and commit are recorded in `packages/koffing/test/upstream.json` and the frozen lockfile. Database-backed species normalization and competitive legality remain outside Koffing's scope.
 
 MIT licensed. Pokémon is a trademark of its respective owners; this project is unaffiliated.

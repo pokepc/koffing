@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Koffing } from "koffing";
+import { exportTeams, KoffingError, parse, parseJSON, type Diagnostic } from "koffing";
 
 const example = `=== [gen9] Example team ===
 
@@ -17,21 +17,44 @@ IVs: 0 Atk
 
 type InputFormat = "showdown" | "json";
 
-function convert(input: string, format: InputFormat) {
-  if (!input.trim()) return { output: "", error: "", summary: "Ready when you are" };
+function convert(input: string, format: InputFormat, strict: boolean) {
+  const empty = {
+    output: "",
+    formatted: "",
+    error: "",
+    diagnostics: [] as Diagnostic[],
+    summary: "Ready when you are",
+  };
+  if (!input.trim()) return empty;
   try {
-    const showdown = format === "json" ? Koffing.toShowdown(input) : input;
-    const parsed = Koffing.parse(showdown);
+    const options = { mode: strict ? ("strict" as const) : ("permissive" as const) };
+    const parsed = format === "json" ? parseJSON(input, options) : parse(input, options);
     const count = parsed.teams.reduce((total, team) => total + team.pokemon.length, 0);
+    const first = parsed.teams[0];
+    const json = JSON.stringify(
+      parsed.teams.length === 1 &&
+        first &&
+        first.name === undefined &&
+        first.format === undefined &&
+        first.folder === undefined
+        ? first.pokemon
+        : { teams: parsed.teams },
+      null,
+      2,
+    );
+    const showdown = exportTeams(parsed.teams);
     return {
-      output: format === "json" ? showdown : parsed.toJson(),
+      output: format === "json" ? showdown : json,
+      formatted: format === "json" ? JSON.stringify(JSON.parse(input), null, 2) : showdown,
       error: "",
+      diagnostics: parsed.diagnostics,
       summary: `${parsed.teams.length} team${parsed.teams.length === 1 ? "" : "s"} · ${count} Pokémon`,
     };
   } catch (error) {
     return {
-      output: "",
+      ...empty,
       error: error instanceof Error ? error.message : "Unable to convert this input.",
+      diagnostics: error instanceof KoffingError ? error.diagnostics : [],
       summary: "Check your input",
     };
   }
@@ -41,7 +64,8 @@ export function App() {
   const [input, setInput] = useState(example);
   const [format, setFormat] = useState<InputFormat>("showdown");
   const [notice, setNotice] = useState("");
-  const { output, error, summary } = convert(input, format);
+  const [strict, setStrict] = useState(false);
+  const { output, formatted, error, diagnostics, summary } = convert(input, format, strict);
 
   function updateInput(value: string) {
     setInput(value);
@@ -95,10 +119,21 @@ export function App() {
             <option value="showdown">Showdown</option>
             <option value="json">JSON</option>
           </select>
-          <button onClick={swap} disabled={!output || !!error}>
+          <button onClick={swap} disabled={!output || !!error || diagnostics.length > 0}>
             Swap direction <span aria-hidden="true">⇄</span>
           </button>
         </div>
+        <label className="strict-control">
+          <input
+            type="checkbox"
+            checked={strict}
+            onChange={(event) => {
+              setStrict(event.target.checked);
+              setNotice("");
+            }}
+          />{" "}
+          Strict parsing
+        </label>
         <span className="summary">{summary}</span>
       </div>
       <div className="editors">
@@ -121,14 +156,8 @@ export function App() {
           />
           <div className="editor-actions">
             <button
-              disabled={!input.trim() || !!error}
-              onClick={() =>
-                updateInput(
-                  format === "showdown"
-                    ? Koffing.format(input)
-                    : JSON.stringify(JSON.parse(input), null, 2),
-                )
-              }
+              disabled={!input.trim() || !!error || diagnostics.length > 0}
+              onClick={() => updateInput(formatted)}
             >
               Format input
             </button>
@@ -171,6 +200,27 @@ export function App() {
         <p id="conversion-error" className="error" role="alert">
           {error}
         </p>
+      )}
+      {diagnostics.length > 0 && (
+        <aside className="diagnostics" aria-label="Parsing issues">
+          <p>
+            {diagnostics.length} parsing {diagnostics.length === 1 ? "issue" : "issues"}. Review
+            these before using the output. Formatting and swapping are disabled while issues remain.
+          </p>
+          <ul>
+            {diagnostics.slice(0, 20).map((diagnostic, index) => (
+              <li key={index}>
+                {diagnostic.line
+                  ? `Line ${diagnostic.line}: `
+                  : diagnostic.path
+                    ? `${diagnostic.path}: `
+                    : ""}
+                {diagnostic.message}
+              </li>
+            ))}
+          </ul>
+          {diagnostics.length > 20 && <p>{diagnostics.length - 20} additional issues.</p>}
+        </aside>
       )}
       <p className="notice" role="status">
         {notice}

@@ -224,6 +224,24 @@
     color: #545694;
     font-size: 0.85rem;
   }
+  .strict-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #606170;
+    font-size: 0.85rem;
+  }
+  .diagnostics {
+    margin-block: 1rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid #d4c567;
+    border-radius: 8px;
+    background: #fffde5;
+    color: #55501e;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
   .error {
     color: #902929;
     background: #fff0f0;

@@ -1,0 +1,14 @@
+{
+  "package": "pokemon-showdown",
+  "version": "0.11.11",
+  "revision": "739a5e1fee432ad80ff7136d70cca993be358b59",
+  "source": "https://github.com/smogon/pokemon-showdown/blob/739a5e1fee432ad80ff7136d70cca993be358b59/sim/teams.ts",
+  "scope": "Server Teams.import/export on canonical species and common text syntax; not database aliases, legality, client-only syntax, or packed teams.",
+  "intentionalDifferences": [
+    "Koffing follows the client in deriving hpType from a bracketed Hidden Power move; the server only normalizes the move name.",
+    "Koffing keeps sparse fields; comparisons fill Showdown defaults only for semantic comparison.",
+    "Koffing preserves Dynamax Level; this server release exports it but ignores it during text import.",
+    "Koffing does not infer generation-specific Hidden Power IVs. The server text importer initializes IVs before its inference branch, so its missing-IV behavior is not a reliable client compatibility reference.",
+    "Koffing retains collection boundaries and metadata; the server importer flattens team backups."
+  ]
+}

@@ -6,6 +6,7 @@
     "dev": "pnpm --filter @koffing/web dev",
     "build": "pnpm -r build",
     "test": "pnpm --filter koffing test",
+    "bench": "pnpm --filter koffing bench",
     "typecheck": "pnpm -r typecheck",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
