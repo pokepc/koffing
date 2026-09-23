@@ -22,6 +22,7 @@ export function resolveLimits(options: Options = {}): Limits {
   if (options.mode !== undefined && options.mode !== "strict" && options.mode !== "permissive") {
     throw new TypeError("mode must be strict or permissive");
   }
+  if (options.limits === undefined) return DEFAULT_LIMITS;
   const limits = { ...DEFAULT_LIMITS, ...options.limits };
   for (const [key, value] of Object.entries(limits)) {
     if (!Number.isSafeInteger(value) || value < 1)

@@ -44,11 +44,17 @@ const natures: string[][] = [
   ["Modest", "Mild", "Quiet", "Bashful", "Rash"],
   ["Calm", "Gentle", "Sassy", "Careful", "Quirky"],
 ];
+const controlCharacters = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u2028\u2029]/;
 
 /** Parse Showdown text without silently clamping values or dropping extra moves. */
 export function parse(input: string, options: Options = {}): ParseResult {
   const limits = resolveLimits(options);
   checkInput(input, limits);
+  // One native scan replaces repeated checks on every ordinary line. Fall back
+  // to line-local checks when needed to retain exact diagnostic locations.
+  const hasControls = controlCharacters.test(input);
+  const hasTabs = input.includes("\t");
+  const hasPipes = input.includes("|");
   const teams: Team[] = [];
   const diagnostics: Diagnostic[] = [];
   let team: Team | undefined;
@@ -91,16 +97,21 @@ export function parse(input: string, options: Options = {}): ParseResult {
     if (/^Frustration$/i.test(value) && !explicitHappiness) pokemon.happiness = 0;
   };
   // Scan lines directly so the input-size limit also bounds temporary allocation.
+  // Cache both separators: repeatedly searching for an absent LF or CR is quadratic.
+  let nextCR = input.indexOf("\r");
+  let nextLF = input.indexOf("\n");
   for (let start = 0; start <= input.length;) {
-    let end = start;
-    while (end < input.length && input[end] !== "\n" && input[end] !== "\r") end++;
+    let end = nextLF < 0 ? input.length : nextLF;
+    if (nextCR >= 0 && nextCR < end) end = nextCR;
     lineNumber++;
     if (end - start > limits.maxLineLength) fail("line-limit", "Line is too long", lineNumber);
     const rawLine = input.slice(start, end);
-    const line = rawLine.replace(/\t/g, " ").trim();
+    const line = (hasTabs ? rawLine.replace(/\t/g, " ") : rawLine).trim();
     const separator = input[end];
     start = end + (separator === "\r" && input[end + 1] === "\n" ? 2 : 1);
-    if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u2028\u2029]/.test(rawLine) || line.includes("\t")) {
+    if (nextCR >= 0 && nextCR < start) nextCR = input.indexOf("\r", start);
+    if (nextLF >= 0 && nextLF < start) nextLF = input.indexOf("\n", start);
+    if (hasControls && controlCharacters.test(rawLine)) {
       warn("invalid-character", "Control characters are not allowed");
       continue;
     }
@@ -108,13 +119,17 @@ export function parse(input: string, options: Options = {}): ParseResult {
       pokemon = undefined;
       continue;
     }
-    if (line.includes("|"))
+    if (hasPipes && line.includes("|"))
       fail(
         "unsupported-packed-format",
         "Packed teams are not supported; import Showdown text instead",
         lineNumber,
       );
-    const header = /^===\s*(.*?)\s*===$/.exec(line);
+    if (pokemon && (line[0] === "-" || line[0] === "~")) {
+      move(line.slice(1).trimStart());
+      continue;
+    }
+    const header = line[0] === "=" ? /^===\s*(.*?)\s*===$/.exec(line) : null;
     if (header) {
       const value: Team = { pokemon: [] };
       let title = header[1]!.trim();
@@ -138,13 +153,18 @@ export function parse(input: string, options: Options = {}): ParseResult {
       pokemon = undefined;
       continue;
     }
-    const detail = /^([^:]+):\s*(.*)$/.exec(line);
-    const nature = detail || line.includes("@") ? null : /^(.*?)\s+Nature$/i.exec(line);
-    const bare = /^(Shiny|Gigantamax)$/i.exec(line);
+    const colon = line.indexOf(":");
+    const hasDetail = colon > 0;
+    const nature =
+      hasDetail || line.includes("@") || !/\sNature$/i.test(line)
+        ? null
+        : /^(.*?)\s+Nature$/i.exec(line);
+    const bare = !hasDetail && /^(Shiny|Gigantamax)$/i.test(line);
     if (!pokemon) {
       const typeNullHeader =
+        hasDetail &&
         /^(?:[^:]*\()?Type: Null\)?(?:\s+\([MFN]\))?(?:\s+\[[^\]]+\])?(?:\s+@\s+.+)?$/i.test(line);
-      if (line.startsWith("-") || (detail && !typeNullHeader) || nature || bare) {
+      if (line.startsWith("-") || (hasDetail && !typeNullHeader) || nature || bare) {
         warn("orphan-detail", "Pokémon detail appears before a Pokémon header");
         continue;
       }
@@ -182,7 +202,12 @@ export function parse(input: string, options: Options = {}): ParseResult {
       if (gender) pokemon.gender = gender;
       if (!team) addTeam({ pokemon: [] });
       team!.pokemon.push(pokemon);
-      seen = new Set(Object.keys(pokemon).filter((key) => key !== "moves"));
+      seen.clear();
+      seen.add("species");
+      if (pokemon.name !== undefined) seen.add("name");
+      if (pokemon.item !== undefined) seen.add("item");
+      if (pokemon.ability !== undefined) seen.add("ability");
+      if (pokemon.gender !== undefined) seen.add("gender");
       explicitHpType = false;
       explicitHappiness = false;
       explicitNature = false;
@@ -190,7 +215,7 @@ export function parse(input: string, options: Options = {}): ParseResult {
       decreased = undefined;
       continue;
     }
-    const bracketDetail = /^\[([^\]]+)\](?:\s*@\s*(.+))?$/.exec(line);
+    const bracketDetail = line[0] === "[" ? /^\[([^\]]+)\](?:\s*@\s*(.+))?$/.exec(line) : null;
     if (bracketDetail) {
       duplicate("ability");
       pokemon.ability = bracketDetail[1]!.trim();
@@ -201,18 +226,14 @@ export function parse(input: string, options: Options = {}): ParseResult {
       }
       continue;
     }
-    if (/^[-~]\s*/.test(line)) {
-      move(line.replace(/^[-~]\s*/, ""));
-      continue;
-    }
     if (nature) {
       duplicate("nature");
       pokemon.nature = nature[1]!.trim();
       explicitNature = true;
       continue;
     }
-    const key = (detail?.[1] ?? bare?.[1] ?? "").trim().toLowerCase();
-    const value = detail?.[2]?.trim() ?? "Yes";
+    const key = (hasDetail ? line.slice(0, colon).trim() : bare ? line : "").toLowerCase();
+    const value = hasDetail ? line.slice(colon + 1).trim() : "Yes";
     if (key === "move") {
       move(value);
       continue;

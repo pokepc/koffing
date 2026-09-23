@@ -23,6 +23,9 @@ const strings = [
 const numbers = ["level", "happiness", "dynamaxLevel"] as const;
 const flags = ["shiny", "gigantamax"] as const;
 const stats = ["hp", "atk", "def", "spa", "spd", "spe"] as const;
+const statKeys = new Set<string>(stats);
+const teamKeys = new Set(["name", "format", "folder", "pokemon"]);
+const collectionKeys = new Set(["teams"]);
 const setKeys = new Set<string>([
   ...strings,
   ...numbers,
@@ -33,7 +36,7 @@ const setKeys = new Set<string>([
   "moves",
 ]);
 
-function object(value: unknown, path: string, limits: Limits): Record<string, unknown> {
+function objectKeys(value: unknown, path: string, limits: Limits): (string | symbol)[] {
   if (
     typeof value !== "object" ||
     value === null ||
@@ -42,17 +45,26 @@ function object(value: unknown, path: string, limits: Limits): Record<string, un
   ) {
     fail("invalid-json", `${path} must be a plain object`);
   }
-  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   const keys = Reflect.ownKeys(value);
   if (keys.length > limits.maxDiagnostics + 32)
     fail("property-limit", `${path} contains too many properties`);
+  return keys;
+}
+
+function property(value: object, key: string | symbol, path: string, limits: Limits): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+  if (typeof key !== "string" || !("value" in descriptor))
+    fail("invalid-json", `${path} contains an accessor or symbol`);
+  if (key.length > Math.max(32, limits.maxLineLength))
+    fail("property-limit", `${path} contains an oversized property name`);
+  return descriptor.value;
+}
+
+function object(value: unknown, path: string, limits: Limits): Record<string, unknown> {
+  const keys = objectKeys(value, path, limits);
+  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   for (const key of keys) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
-    if (typeof key !== "string" || !("value" in descriptor))
-      fail("invalid-json", `${path} contains an accessor or symbol`);
-    if (key.length > Math.max(32, limits.maxLineLength))
-      fail("property-limit", `${path} contains an oversized property name`);
-    result[key] = descriptor.value;
+    result[key as string] = property(value as object, key, path, limits);
   }
   return result;
 }
@@ -62,12 +74,9 @@ function array(value: unknown, path: string, maximum: number): unknown[] {
     fail("invalid-json", `${path} must be an array`);
   if (value.length > maximum) fail("collection-limit", `${path} exceeds ${maximum} entries`);
   const keys = Reflect.ownKeys(value);
-  if (
-    keys.length !== value.length + 1 ||
-    keys.some(
-      (key) => typeof key !== "string" || (key !== "length" && !/^(0|[1-9]\d*)$/u.test(key)),
-    )
-  )
+  // Every index is checked below. Exactly length + 1 own keys then leaves room
+  // only for those indices and the mandatory length property.
+  if (keys.length !== value.length + 1)
     fail("invalid-json", `${path} contains non-index properties or holes`);
   const result: unknown[] = [];
   for (let i = 0; i < value.length; i++) {
@@ -130,51 +139,96 @@ function readSet(
   limits: Limits,
   budget: { used: number },
 ): PokemonSet {
-  const source = object(value, path, limits);
+  const keys = objectKeys(value, path, limits);
   budget.used += 512;
   if (budget.used > limits.maxInputLength)
     fail("input-limit", "Aggregate data exceeds configured input limit");
-  unknownKeys(source, setKeys, path, diagnostics, limits);
-  const species = text(source.species, `${path}.species`, limits, budget);
-  if (!species) fail("invalid-species", `${path}.species is required`);
-  const result: PokemonSet = { species, moves: [] };
-  for (const key of strings)
-    if (key !== "species" && source[key] !== undefined)
-      result[key] = text(source[key], `${path}.${key}`, limits, budget);
-  for (const key of numbers)
-    if (source[key] !== undefined) result[key] = finite(source[key], `${path}.${key}`);
-  for (const key of flags) {
-    if (source[key] !== undefined) {
-      if (typeof source[key] !== "boolean")
-        fail("invalid-boolean", `${path}.${key} must be boolean`);
-      result[key] = source[key];
+  const result: PokemonSet = { species: "", moves: [] };
+  let hasMoves = false;
+  // Validate each own descriptor and copy directly into the final whitelist shape.
+  // Never read through the source, invoke a getter, or trust an earlier parse.
+  for (const rawKey of keys) {
+    const entry = property(value as object, rawKey, path, limits);
+    const key = rawKey as keyof PokemonSet;
+    if (!setKeys.has(key)) {
+      report(
+        diagnostics,
+        {
+          code: "unknown-field",
+          severity: "warning",
+          path: `${path}.${key}`,
+          message: `Unknown field ${path}.${key}`,
+        },
+        limits,
+      );
+      continue;
+    }
+    if (entry === undefined && key !== "species" && key !== "moves") continue;
+    switch (key) {
+      case "species":
+      case "name":
+      case "item":
+      case "ability":
+      case "nature":
+      case "pokeball":
+      case "hpType":
+      case "teraType":
+        result[key] = text(entry, `${path}.${key}`, limits, budget);
+        break;
+      case "level":
+      case "happiness":
+      case "dynamaxLevel":
+        result[key] = finite(entry, `${path}.${key}`);
+        break;
+      case "shiny":
+      case "gigantamax":
+        if (typeof entry !== "boolean") fail("invalid-boolean", `${path}.${key} must be boolean`);
+        result[key] = entry;
+        break;
+      case "gender":
+        if (entry !== "M" && entry !== "F" && entry !== "N" && entry !== "")
+          fail("invalid-gender", `${path}.gender must be M, F, N or empty`);
+        result.gender = entry;
+        break;
+      case "evs":
+      case "ivs": {
+        const statPath = `${path}.${key}`;
+        const values: Stats = {};
+        for (const rawStat of objectKeys(entry, statPath, limits)) {
+          const number = property(entry as object, rawStat, statPath, limits);
+          const stat = rawStat as keyof Stats;
+          if (!statKeys.has(stat)) {
+            report(
+              diagnostics,
+              {
+                code: "unknown-field",
+                severity: "warning",
+                path: `${statPath}.${stat}`,
+                message: `Unknown field ${statPath}.${stat}`,
+              },
+              limits,
+            );
+          } else if (number !== undefined) {
+            values[stat] = finite(number, `${statPath}.${stat}`);
+          }
+        }
+        result[key] = values;
+        break;
+      }
+      case "moves": {
+        hasMoves = true;
+        const moves = array(entry, `${path}.moves`, limits.maxMoves);
+        for (let index = 0; index < moves.length; index++) {
+          const name = text(moves[index], `${path}.moves[${index}]`, limits, budget);
+          if (!name) fail("invalid-move", `${path}.moves[${index}] cannot be empty`);
+        }
+        result.moves = moves as string[];
+        break;
+      }
     }
   }
-  if (source.gender !== undefined) {
-    if (
-      source.gender !== "M" &&
-      source.gender !== "F" &&
-      source.gender !== "N" &&
-      source.gender !== ""
-    )
-      fail("invalid-gender", `${path}.gender must be M, F, N or empty`);
-    result.gender = source.gender;
-  }
-  for (const key of ["evs", "ivs"] as const) {
-    if (source[key] === undefined) continue;
-    const entries = object(source[key], `${path}.${key}`, limits);
-    unknownKeys(entries, new Set(stats), `${path}.${key}`, diagnostics, limits);
-    const values: Stats = {};
-    for (const stat of stats)
-      if (entries[stat] !== undefined)
-        values[stat] = finite(entries[stat], `${path}.${key}.${stat}`);
-    result[key] = values;
-  }
-  result.moves = array(source.moves, `${path}.moves`, limits.maxMoves).map((move, index) => {
-    const name = text(move, `${path}.moves[${index}]`, limits, budget);
-    if (!name) fail("invalid-move", `${path}.moves[${index}] cannot be empty`);
-    return name;
-  });
+  if (!result.species) fail("invalid-species", `${path}.species is required`);
+  if (!hasMoves) fail("invalid-json", `${path}.moves must be an array`);
   return result;
 }
 
@@ -197,7 +251,7 @@ export function parseJSON(input: unknown, options: Options = {}): ParseResult {
   else {
     const source = object(value, "input", limits);
     if (Object.hasOwn(source, "teams")) {
-      unknownKeys(source, new Set(["teams"]), "input", diagnostics, limits);
+      unknownKeys(source, collectionKeys, "input", diagnostics, limits);
       rawTeams = array(source.teams, "teams", limits.maxTeams);
     } else if (Object.hasOwn(source, "pokemon")) rawTeams = [source];
     else rawTeams = [{ pokemon: [source] }];
@@ -207,13 +261,7 @@ export function parseJSON(input: unknown, options: Options = {}): ParseResult {
   const teams = rawTeams.map((raw, index): Team => {
     const path = `teams[${index}]`;
     const source = object(raw, path, limits);
-    unknownKeys(
-      source,
-      new Set(["name", "format", "folder", "pokemon"]),
-      path,
-      diagnostics,
-      limits,
-    );
+    unknownKeys(source, teamKeys, path, diagnostics, limits);
     const members = array(source.pokemon, `${path}.pokemon`, limits.maxPokemon - total);
     total += members.length;
     const team: Team = {
@@ -247,21 +295,30 @@ function checkRanges(
       value: number | undefined,
       min: number,
       max: number,
-      path: string,
+      field: string,
       code = "number-range",
     ): void => {
       if (value !== undefined && (!Number.isInteger(value) || value < min || value > max))
-        add(code, path, `Expected an integer from ${min} to ${max}; value preserved`);
+        add(
+          code,
+          `${prefix}.${field}`,
+          `Expected an integer from ${min} to ${max}; value preserved`,
+        );
     };
-    range(set.level, 1, 100, `${prefix}.level`);
-    range(set.happiness, 0, 255, `${prefix}.happiness`);
-    range(set.dynamaxLevel, 0, 10, `${prefix}.dynamaxLevel`);
+    range(set.level, 1, 100, "level");
+    range(set.happiness, 0, 255, "happiness");
+    range(set.dynamaxLevel, 0, 10, "dynamaxLevel");
+    let evTotal = 0;
     for (const stat of stats) {
-      range(set.evs?.[stat], 0, 255, `${prefix}.evs.${stat}`, "stat-range");
-      range(set.ivs?.[stat], 0, 31, `${prefix}.ivs.${stat}`, "stat-range");
+      const ev = set.evs?.[stat];
+      const iv = set.ivs?.[stat];
+      if (ev !== undefined) {
+        evTotal += ev;
+        range(ev, 0, 255, `evs.${stat}`, "stat-range");
+      }
+      if (iv !== undefined) range(iv, 0, 31, `ivs.${stat}`, "stat-range");
     }
-    if (Object.values(set.evs ?? {}).reduce((sum, ev) => sum + ev, 0) > 510)
-      add("ev-total", `${prefix}.evs`, "Traditional EV total exceeds 510");
+    if (evTotal > 510) add("ev-total", `${prefix}.evs`, "Traditional EV total exceeds 510");
     if (set.moves.length > 4)
       add("move-count", `${prefix}.moves`, "Traditional sets contain at most four moves");
   }

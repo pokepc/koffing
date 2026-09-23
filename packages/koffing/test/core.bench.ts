@@ -20,7 +20,7 @@ const malformed = `Koffing\n${"?".repeat(12_000)}\n- Smog`;
 const ours = parse(single).teams[0]!.pokemon;
 const theirs = Teams.import(single)!;
 const collection = parse(backup).teams;
-const timing = { time: 150, warmupTime: 50, iterations: 10 };
+const timing = { time: 500, warmupTime: 200, iterations: 10 };
 
 test("six Pokémon import, common syntax", async ({ bench }) => {
   await bench.compare(

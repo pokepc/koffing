@@ -4,6 +4,23 @@ import { KoffingError } from "../src/limits";
 import { exportTeam } from "../src/serialize";
 
 describe("Showdown text parsing", () => {
+  it("preserves line numbers and boundaries across mixed separators and slow-path characters", () => {
+    const input =
+      "Koffing\rAbility: Levitate\r\n- Protect\n---\rWeezing\nLevel: 150\r\nBall: Poke\tBall\rUnknown: value\n";
+    const result = parse(input);
+    expect(result.teams[0]!.pokemon).toEqual([
+      { species: "Koffing", ability: "Levitate", moves: ["Protect"] },
+      { species: "Weezing", level: 150, pokeball: "Poke Ball", moves: [] },
+    ]);
+    expect(result.diagnostics.map(({ code, line }) => [code, line])).toEqual([
+      ["number-range", 6],
+      ["unknown-line", 8],
+    ]);
+    expect(
+      parse("Koffing\r- Protect\n\u0085\r\nUnknown: value").diagnostics.map(({ line }) => line),
+    ).toEqual([3, 4]);
+    expect(() => parse("Koffing\r- Protect\nUnknown: |")).toThrow(/Packed teams/);
+  });
   it("round-trips finite stats serialized in exponent notation", () => {
     const pokemon = [{ species: "Koffing", moves: [], evs: { hp: 1e100, atk: 1e-9 } }];
     expect(parse(exportTeam(pokemon)).teams[0]!.pokemon).toEqual(pokemon);

@@ -12,6 +12,36 @@ const set = (): PokemonSet => ({
 });
 
 describe("JSON boundaries", () => {
+  it("rejects hidden accessors and symbols at nested boundaries without invoking getters", () => {
+    let calls = 0;
+    const evs = Object.defineProperty({}, "hp", {
+      get: () => {
+        calls++;
+        return 4;
+      },
+    });
+    const hidden = Object.defineProperty(set(), "ability", {
+      get: () => {
+        calls++;
+        return "Levitate";
+      },
+    });
+    const symbol = { ...set(), [Symbol("hidden")]: true };
+    const missingIndex = Object.assign(Array(1), { extra: "Protect" });
+    for (const input of [hidden, symbol, { ...set(), evs }, { ...set(), moves: missingIndex }]) {
+      expect(() => parseJSON([input])).toThrow();
+      expect(() => exportTeam([input])).toThrow();
+    }
+    expect(calls).toBe(0);
+  });
+
+  it("copies non-enumerable data fields and null-prototype stats", () => {
+    const input = Object.defineProperty(set(), "ability", { value: "Levitate" });
+    const evs: Record<string, number> = Object.create(null);
+    evs.hp = 4;
+    expect(parseJSON([{ ...input, evs }]).teams[0]!.pokemon[0]!.evs).toEqual({ hp: 4 });
+    expect(parseJSON([input]).teams[0]!.pokemon[0]!.ability).toBe("Levitate");
+  });
   it("accepts set, array, team and collection shapes and copies nested data", () => {
     const pokemon = set();
     for (const input of [
@@ -142,6 +172,17 @@ describe("JSON boundaries", () => {
 });
 
 describe("Showdown serialization integrity", () => {
+  it("keeps strict numeric diagnostics and diagnostic budgets at export boundaries", () => {
+    const input = { ...set(), level: 150, happiness: -1 };
+    expect(exportTeam([input])).toContain("Level: 150");
+    expect(() => exportTeam([input], { mode: "strict" })).toThrow(/Expected an integer/);
+    expect(() => exportTeam([input], { limits: { maxDiagnostics: 1 } })).toThrow(
+      /Too many parsing issues/,
+    );
+    expect(() => exportTeam([Object.assign(set(), { unknown: "value" })])).toThrow(
+      /unknown fields/,
+    );
+  });
   it("preserves false, zero, high levels, extra moves, and explicit HP type", () => {
     const input: PokemonSet = {
       ...set(),

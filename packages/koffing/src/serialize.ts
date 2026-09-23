@@ -36,7 +36,18 @@ function decimal(value: number): string {
 }
 
 function serializeSet(set: PokemonSet): string {
-  for (const [key, value] of Object.entries(set)) {
+  for (const key of [
+    "species",
+    "name",
+    "item",
+    "ability",
+    "nature",
+    "pokeball",
+    "hpType",
+    "teraType",
+    "gender",
+  ] as const) {
+    const value = set[key];
     if (typeof value === "string") {
       representable(value, /\|/u, key);
       if (value === "" && key !== "gender" && key !== "name" && key !== "item")
@@ -64,9 +75,9 @@ function serializeSet(set: PokemonSet): string {
   let title = set.name ? `${set.name} (${set.species})` : set.species;
   if (set.gender === "M" || set.gender === "F") title += ` (${set.gender})`;
   if (set.item) title += ` @ ${set.item}`;
-  const lines = [title];
+  let output = title;
   const append = (label: string, value: string | number | undefined): void => {
-    if (value !== undefined) lines.push(`${label}: ${value}`);
+    if (value !== undefined) output += `\n${label}: ${value}`;
   };
   append("Ability", set.ability);
   append("Level", set.level);
@@ -80,28 +91,37 @@ function serializeSet(set: PokemonSet): string {
   append("Tera Type", set.teraType);
   const appendStats = (label: string, values: Stats | undefined): void => {
     if (values === undefined) return;
-    const entries = stats.flatMap(([key, name]) =>
-      values[key] === undefined ? [] : [`${decimal(values[key])} ${name}`],
-    );
-    if (entries.length) append(label, entries.join(" / "));
+    let entries = "";
+    for (const [key, name] of stats) {
+      const value = values[key];
+      if (value !== undefined) {
+        if (entries) entries += " / ";
+        entries += `${decimal(value)} ${name}`;
+      }
+    }
+    if (entries) append(label, entries);
   };
   appendStats("EVs", set.evs);
-  if (set.nature) lines.push(`${set.nature} Nature`);
+  if (set.nature) output += `\n${set.nature} Nature`;
   appendStats("IVs", set.ivs);
   for (const move of set.moves) {
     representable(move, /\|/u, "move");
     const hidden = /^Hidden Power ([a-z]+)$/iu.exec(move);
-    lines.push(`- ${hidden ? `Hidden Power [${hidden[1]}]` : move}`);
+    output += `\n- ${hidden ? `Hidden Power [${hidden[1]}]` : move}`;
   }
-  return lines.join("\n");
+  return output;
 }
 
 function checkedOutput(output: string, options: Options): string {
   const limits = resolveLimits(options);
   checkInput(output, limits);
-  for (const line of output.split("\n"))
-    if (line.length > limits.maxLineLength)
+  for (let start = 0; start < output.length;) {
+    const newline = output.indexOf("\n", start);
+    const end = newline < 0 ? output.length : newline;
+    if (end - start > limits.maxLineLength)
       fail("line-limit", "Serialized line exceeds configured limit");
+    start = end + 1;
+  }
   return output;
 }
 
