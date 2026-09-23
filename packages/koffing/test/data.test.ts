@@ -30,7 +30,6 @@ describe("JSON boundaries", () => {
     const missingIndex = Object.assign(Array(1), { extra: "Protect" });
     for (const input of [hidden, symbol, { ...set(), evs }, { ...set(), moves: missingIndex }]) {
       expect(() => parseJSON([input])).toThrow();
-      expect(() => exportTeam([input])).toThrow();
     }
     expect(calls).toBe(0);
   });
@@ -131,7 +130,7 @@ describe("JSON boundaries", () => {
     };
     const result = parseJSON(input, { mode: "strict" });
     expect(result.diagnostics).toEqual([]);
-    expect(parse(exportTeam([input], { mode: "strict" }), { mode: "strict" })).toEqual(result);
+    expect(parse(exportTeam([input]), { mode: "strict" })).toEqual(result);
   });
 
   it("preserves finite values and extra moves until explicitly sanitized", () => {
@@ -172,16 +171,28 @@ describe("JSON boundaries", () => {
 });
 
 describe("Showdown serialization integrity", () => {
-  it("keeps strict numeric diagnostics and diagnostic budgets at export boundaries", () => {
+  it("formats trusted sets without automatic validation and ignores extra properties", () => {
     const input = { ...set(), level: 150, happiness: -1 };
     expect(exportTeam([input])).toContain("Level: 150");
-    expect(() => exportTeam([input], { mode: "strict" })).toThrow(/Expected an integer/);
-    expect(() => exportTeam([input], { limits: { maxDiagnostics: 1 } })).toThrow(
-      /Too many parsing issues/,
-    );
-    expect(() => exportTeam([Object.assign(set(), { unknown: "value" })])).toThrow(
-      /unknown fields/,
-    );
+    expect(exportTeam([Object.assign(set(), { unknown: "value" })])).toBe(exportTeam([set()]));
+    expect(validateTeam([input]).map(({ code }) => code)).toEqual(["number-range", "number-range"]);
+    expect(() => parseJSON(input, { mode: "strict" })).toThrow();
+  });
+
+  it("reads properties directly and skips nonfinite numeric output", () => {
+    const input = {
+      ...set(),
+      get ability(): string {
+        return "Levitate";
+      },
+      level: NaN,
+      happiness: Infinity,
+      evs: { hp: 4, atk: Infinity },
+    };
+    const output = exportTeam([input]);
+    expect(output).toContain("Ability: Levitate");
+    expect(output).toContain("EVs: 4 HP");
+    expect(output).not.toMatch(/NaN|Infinity|Level:|Happiness:/);
   });
   it("preserves false, zero, high levels, extra moves, and explicit HP type", () => {
     const input: PokemonSet = {
@@ -198,21 +209,15 @@ describe("Showdown serialization integrity", () => {
     expect(parse(exportTeam([extreme])).teams[0]!.pokemon[0]).toEqual(extreme);
   });
 
-  it("revalidates mutated input and refuses ambiguous delimiters", () => {
+  it("leaves string content to the caller instead of validating during export", () => {
     const input = parseJSON(set()).teams[0]!.pokemon[0]!;
     input.ability = "Levitate\nShiny: Yes";
-    expect(() => exportTeam([input])).toThrow();
-    for (const species of [
-      "Koffing @ Eviolite",
-      "Nick (Koffing)",
-      "Level: 5",
-      "- Protect",
-      "Bold Nature",
-    ]) {
-      expect(() => exportTeam([{ ...set(), species }])).toThrow(/ambiguous|delimiters/);
-    }
-    expect(() => exportTeams([{ name: "A/B", pokemon: [set()] }])).toThrow(/delimiters/);
-    expect(() => exportTeam([{ ...set(), ability: "Levitate|Corrosion" }])).toThrow(/delimiters/);
+    expect(exportTeam([input])).toContain("Ability: Levitate\nShiny: Yes");
+    expect(() => parseJSON(input)).toThrow(/control characters/);
+    expect(exportTeams([{ name: "A/B", pokemon: [set()] }])).toContain("=== A/B ===");
+    expect(exportTeam([{ ...set(), ability: "Levitate|Corrosion" }])).toContain(
+      "Levitate|Corrosion",
+    );
   });
 
   it("retains Type: Null and collection boundaries", () => {

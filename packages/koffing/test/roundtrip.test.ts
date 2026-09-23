@@ -7,10 +7,6 @@ describe("cross-boundary round trips", () => {
       { species: "Koffing", moves: ["Protect"], ability: "Custom Nature", item: "Nature" },
     ];
     expect(parse(exportTeam(pokemon)).teams[0]?.pokemon).toEqual(pokemon);
-    expect(() => exportTeam([{ species: "Koffing", moves: [], nature: "- Bold" }])).toThrow();
-    expect(() =>
-      exportTeam([{ species: "Koffing", moves: [], nature: "Ability: Bold" }]),
-    ).toThrow();
   });
 
   it("normalizes tabs before accepting serializable text", () => {

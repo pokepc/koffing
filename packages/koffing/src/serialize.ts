@@ -1,6 +1,4 @@
-import { parseJSON } from "./data";
-import { checkInput, fail, resolveLimits } from "./limits";
-import type { Options, PokemonSet, Stats, Team } from "./types";
+import type { PokemonSet, Stats, Team } from "./types";
 
 const stats = [
   ["hp", "HP"],
@@ -10,11 +8,6 @@ const stats = [
   ["spd", "SpD"],
   ["spe", "Spe"],
 ] as const;
-
-function representable(value: string | undefined, forbidden: RegExp, path: string): void {
-  if (value !== undefined && forbidden.test(value))
-    fail("unrepresentable-text", `${path} contains ambiguous Showdown delimiters`);
-}
 
 // Stat syntax does not accept exponent notation, although finite JS numbers do.
 function decimal(value: number): string {
@@ -36,48 +29,13 @@ function decimal(value: number): string {
 }
 
 function serializeSet(set: PokemonSet): string {
-  for (const key of [
-    "species",
-    "name",
-    "item",
-    "ability",
-    "nature",
-    "pokeball",
-    "hpType",
-    "teraType",
-    "gender",
-  ] as const) {
-    const value = set[key];
-    if (typeof value === "string") {
-      representable(value, /\|/u, key);
-      if (value === "" && key !== "gender" && key !== "name" && key !== "item")
-        fail("unrepresentable-text", `${key} cannot be exported as empty text`);
-    }
-  }
-  representable(set.species, /[@()|\[\]=]/u, "species");
-  representable(set.name, /[@()|\[\]=]/u, "name");
-  representable(set.item, /[@:]/u, "item");
-  representable(set.nature, /[:@]|^[-~]/u, "nature");
-  if (set.item && /^No Item$/iu.test(set.item))
-    fail("unrepresentable-text", "No Item is reserved for an absent item");
-  if (set.species.includes(":") && set.species !== "Type: Null")
-    fail("unrepresentable-text", "species contains an ambiguous colon");
-  representable(set.name, /:/u, "name");
-  for (const value of [set.species, set.name]) {
-    if (
-      value &&
-      (/^[-~]/u.test(value) || /\sNature$/iu.test(value) || /^(Shiny|Gigantamax)$/iu.test(value))
-    )
-      fail("unrepresentable-text", "Identity is ambiguous with a Showdown detail");
-  }
-  if (/^[-~]/u.test(set.species))
-    fail("unrepresentable-text", "species cannot start with a move marker");
   let title = set.name ? `${set.name} (${set.species})` : set.species;
   if (set.gender === "M" || set.gender === "F") title += ` (${set.gender})`;
   if (set.item) title += ` @ ${set.item}`;
   let output = title;
   const append = (label: string, value: string | number | undefined): void => {
-    if (value !== undefined) output += `\n${label}: ${value}`;
+    if (value !== undefined && (typeof value !== "number" || Number.isFinite(value)))
+      output += `\n${label}: ${value}`;
   };
   append("Ability", set.ability);
   append("Level", set.level);
@@ -94,7 +52,7 @@ function serializeSet(set: PokemonSet): string {
     let entries = "";
     for (const [key, name] of stats) {
       const value = values[key];
-      if (value !== undefined) {
+      if (value !== undefined && Number.isFinite(value)) {
         if (entries) entries += " / ";
         entries += `${decimal(value)} ${name}`;
       }
@@ -105,49 +63,25 @@ function serializeSet(set: PokemonSet): string {
   if (set.nature) output += `\n${set.nature} Nature`;
   appendStats("IVs", set.ivs);
   for (const move of set.moves) {
-    representable(move, /\|/u, "move");
     const hidden = /^Hidden Power ([a-z]+)$/iu.exec(move);
     output += `\n- ${hidden ? `Hidden Power [${hidden[1]}]` : move}`;
   }
   return output;
 }
 
-function checkedOutput(output: string, options: Options): string {
-  const limits = resolveLimits(options);
-  checkInput(output, limits);
-  for (let start = 0; start < output.length;) {
-    const newline = output.indexOf("\n", start);
-    const end = newline < 0 ? output.length : newline;
-    if (end - start > limits.maxLineLength)
-      fail("line-limit", "Serialized line exceeds configured limit");
-    start = end + 1;
-  }
-  return output;
-}
-
-/** Validate again at the boundary, including plain objects changed after parsing. */
-export function exportTeam(pokemon: readonly PokemonSet[], options: Options = {}): string {
-  const result = parseJSON(pokemon, options);
-  if (result.diagnostics.some((diagnostic) => diagnostic.code === "unknown-field"))
-    fail("unknown-field", "Cannot serialize unknown fields without data loss");
-  return checkedOutput(result.teams[0]!.pokemon.map(serializeSet).join("\n\n"), options);
+/** Format trusted typed sets, like Showdown. Use parseJSON separately for untrusted data. */
+export function exportTeam(pokemon: readonly PokemonSet[]): string {
+  return pokemon.map(serializeSet).join("\n\n");
 }
 
 /** Collection export always includes headers, preserving team boundaries. */
-export function exportTeams(teams: readonly Team[], options: Options = {}): string {
-  const result = parseJSON({ teams }, options);
-  if (result.diagnostics.some((diagnostic) => diagnostic.code === "unknown-field"))
-    fail("unknown-field", "Cannot serialize unknown fields without data loss");
-  const output = result.teams
+export function exportTeams(teams: readonly Team[]): string {
+  return teams
     .map((team) => {
-      representable(team.name, /[\[\]=/|]/u, "team.name");
-      representable(team.format, /[\[\]=/|]/u, "team.format");
-      representable(team.folder, /[\[\]=|]/u, "team.folder");
       const metadata = `${team.format ? `[${team.format}] ` : ""}${team.folder ? `${team.folder}/` : ""}${team.name ?? ""}`;
       const body = team.pokemon.map(serializeSet).join("\n\n");
-      if (result.teams.length === 1 && !metadata && body) return body;
+      if (teams.length === 1 && !metadata && body) return body;
       return `=== ${metadata} ===${body ? `\n\n${body}` : ""}`;
     })
     .join("\n\n");
-  return checkedOutput(output, options);
 }

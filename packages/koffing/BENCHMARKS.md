@@ -7,12 +7,12 @@ The reference is official Pokémon Showdown 0.11.11, revision `739a5e1fee432ad80
 | Operation                                     | Koffing before | Koffing after | Showdown (final run) | After / Showdown |
 | --------------------------------------------- | -------------: | ------------: | -------------------: | ---------------: |
 | Parse six Pokémon                             |      0.0246 ms |     0.0131 ms |            0.0098 ms |            1.34× |
-| Export six Pokémon                            |      0.0251 ms |     0.0151 ms |            0.0026 ms |            5.81× |
-| Parse 100 teams / 600 Pokémon                 |      2.4221 ms |     1.3182 ms |            1.0030 ms |            1.31× |
-| Export 100 teams / 600 Pokémon                |      2.5405 ms |     1.5204 ms |                    — |                — |
-| Handle a 12,000-character unknown detail line |      0.0838 ms |     0.0121 ms |            0.0008 ms |                — |
+| Export six Pokémon                            |      0.0251 ms |     0.0025 ms |            0.0026 ms |            0.96× |
+| Parse 100 teams / 600 Pokémon                 |      2.4221 ms |     1.3191 ms |            0.9611 ms |            1.37× |
+| Export 100 teams / 600 Pokémon                |      2.5405 ms |     0.2638 ms |                    — |                — |
+| Handle a 12,000-character unknown detail line |      0.0838 ms |     0.0122 ms |            0.0007 ms |                — |
 
-These implementations do different work. Koffing preserves backup metadata, returns diagnostics, enforces resource limits, and validates objects at export boundaries. The upstream importer flattens backups and ignores unknown detail lines. Even the common-syntax export comparison includes Koffing's boundary validation overhead. The measurements do not establish that one design is universally faster.
+These implementations do different work when parsing. Koffing preserves backup metadata, returns diagnostics, and enforces resource limits. The upstream importer flattens backups and ignores unknown detail lines. Both exporters now trust typed objects and format directly, without boundary validation. Formatting and explicit-default handling still differ. Export times are effectively at parity; the small measured difference is not a universal speed advantage.
 
 The CPU profile identified character-by-character scanning, repeated regex dispatch, object copying and descriptor traversal, and temporary serialization arrays as the main avoidable costs. Changes:
 
@@ -21,6 +21,6 @@ The CPU profile identified character-by-character scanning, repeated regex dispa
 - Set and stat descriptors are validated and copied directly into their final whitelist objects, avoiding intermediate snapshots and repeated key scans.
 - Array validation retains descriptor, hole, symbol, and extra-property protection without a redundant key-regex pass.
 - Frozen default limits and fixed key sets are reused; diagnostic paths are built only where needed.
-- Serialization avoids temporary entry arrays and checks output lines without splitting the output.
+- Serialization avoids temporary entry arrays and follows Showdown's direct formatting approach.
 
-The full sanity diagnostics, strict-mode behavior, resource budgets, and fresh export validation remain enabled. No unchecked API or mutable-object cache was added. Export is faster but still substantially slower than Showdown's formatter; preserving its stronger boundary checks has a measurable cost. Parsing takes about 47% less time and six-Pokémon export about 40% less time than the same-session baseline.
+Parsing retains sanity diagnostics, strict-mode behavior, and resource budgets. Export no longer calls JSON parsing/validation, clones input, inspects descriptors, rejects ambiguous strings, or checks output budgets. Callers can explicitly parse or validate untrusted data first. No mutable-object cache was added. Parsing takes about 47% less time and six-Pokémon export about 90% less time than the pre-optimization baseline. Removing export validation reduced the already optimized export from 0.0151 ms to 0.0025 ms.

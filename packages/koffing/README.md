@@ -39,7 +39,7 @@ try {
 }
 ```
 
-Strict mode throws on diagnostics. Unsafe JSON structures, unrepresentable export values, resource-limit violations, and packed team strings fail in either mode. Packed formats are not interpreted as Pokémon names. Use upstream Showdown for pack/unpack support.
+Strict mode throws on parsing diagnostics. Unsafe JSON structures, resource-limit violations, and packed team strings fail in either parsing mode. Packed formats are not interpreted as Pokémon names. Use upstream Showdown for pack/unpack support.
 
 ## Parser scope and safety
 
@@ -77,19 +77,19 @@ const { pokemon, diagnostics } = sanitizeTeam(sets, {
 
 `validateTeam` reports generic numeric ranges, move counts, and EV totals. `sanitizeTeam` clones input, clamps supported numeric fields and truncates moves only when explicitly called, and reports changes. EVs use a 510-point budget allocated in HP, Atk, Def, SpA, SpD, Spe order, capped at 255 per stat. It is not a competitive legality validator. Sanitizing does not establish legality or choose an optimal EV distribution.
 
-`exportTeam` and `exportTeams` validate their inputs again, so editing an object after parsing cannot bypass serialization checks. They do not clamp numbers or trim move lists. Ambiguous delimiters and control characters are rejected instead of generating additional fields, Pokémon, or teams. Exports are Showdown text, not HTML; consumers must still escape them when rendering HTML.
+`exportTeam(pokemon)` and `exportTeams(teams)` follow Showdown's trusted-object approach: they read typed data directly without cloning, descriptor inspection, unknown-property checks, diagnostics, or resource budgets. They accept no parsing options. Extra properties are ignored and nonfinite numbers are omitted; finite values, explicit defaults, and extra moves are preserved. For untrusted input, call `parseJSON` or `validateTeam` explicitly before export. Export does not escape delimiters or control characters, so callers are responsible for supplying representable text fields; arbitrary strings need not round-trip. Exports are Showdown text, not HTML.
 
 ## Resource limits
 
-Every entry point accepts `limits` overrides. Defaults are 2,000,000 UTF-16 input code units, 16,384 code units per line, 1,000 teams, 10,000 Pokémon in total, 256 moves per Pokémon, and 1,000 diagnostics. Limits are resource budgets, not battle rules. Exceeding a limit throws; it never returns a silently truncated collection. Overrides must be positive safe integers.
+Parsing and validation entry points accept `limits` overrides. Defaults are 2,000,000 UTF-16 input code units, 16,384 code units per line, 1,000 teams, 10,000 Pokémon in total, 256 moves per Pokémon, and 1,000 diagnostics. Limits are resource budgets, not battle rules. Exceeding a limit throws; it never returns a silently truncated collection. Overrides must be positive safe integers.
 
-For object inputs, the input budget conservatively counts known string lengths plus 32 units per string and 512 per set; this bounds work before serialization. Small custom budgets may therefore reject objects whose compact JSON would fit. Serialized output is also checked against the input and line budgets.
+For object inputs to parsing and validation, the input budget conservatively counts known string lengths plus 32 units per string and 512 per set. Small custom budgets may therefore reject objects whose compact JSON would fit. Export does not impose input or output budgets.
 
 ```ts
 parse(input, { limits: { maxInputLength: 100_000, maxPokemon: 60 } });
 ```
 
-Object entry points accept ordinary data objects and reject accessor properties and non-plain records. JavaScript proxies are executable objects and should not be treated as untrusted JSON; accept JSON text at trust boundaries.
+JSON parsing and validation accept ordinary data objects and reject accessor properties and non-plain records. Export reads properties directly, including getters. JavaScript proxies are executable objects and should not be treated as untrusted JSON; accept JSON text at trust boundaries.
 
 ## Compatibility and verification
 
