@@ -36,6 +36,14 @@ const stringFields = new Map<
   ["pokeball", "pokeball"],
   ["ball", "pokeball"],
 ]);
+const spreads = new Map<string, "evs" | "ivs" | "sps">([
+  ["evs", "evs"],
+  ["ivs", "ivs"],
+  ["sps", "sps"],
+  ["sp", "sps"],
+  ["stat points", "sps"],
+]);
+const spreadRanges = { evs: [255, 510], ivs: [31, Infinity], sps: [32, 66] } as const;
 const natureStats: StatID[] = ["atk", "def", "spe", "spa", "spd"];
 const natures: string[][] = [
   ["Hardy", "Lonely", "Brave", "Adamant", "Naughty"],
@@ -44,6 +52,8 @@ const natures: string[][] = [
   ["Modest", "Mild", "Quiet", "Bashful", "Rash"],
   ["Calm", "Gentle", "Sassy", "Careful", "Quirky"],
 ];
+/** Showdown identifier spelling, used for its client's placeholder values. */
+const id = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 const controlCharacters = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u2028\u2029]/;
 
 /** Parse Showdown text without silently clamping values or dropping extra moves. */
@@ -126,7 +136,8 @@ export function parse(input: string, options: Options = {}): ParseResult {
         lineNumber,
       );
     if (pokemon && (line[0] === "-" || line[0] === "~")) {
-      move(line.slice(1).trimStart());
+      // Showdown's client pads sets to four moves with empty `- ` lines.
+      if (line.length > 1) move(line.slice(1).trimStart());
       continue;
     }
     const header = line[0] === "=" ? /^===\s*(.*?)\s*===$/.exec(line) : null;
@@ -197,8 +208,8 @@ export function parse(input: string, options: Options = {}): ParseResult {
       count++;
       pokemon = { species, moves: [] };
       if (named?.[1]?.trim()) pokemon.name = named[1].trim();
-      if (item && !/^No Item$/i.test(item)) pokemon.item = item;
-      if (ability) pokemon.ability = ability;
+      if (item && id(item) !== "noitem") pokemon.item = item;
+      if (ability && id(ability) !== "selectability") pokemon.ability = ability;
       if (gender) pokemon.gender = gender;
       if (!team) addTeam({ pokemon: [] });
       team!.pokemon.push(pokemon);
@@ -218,10 +229,12 @@ export function parse(input: string, options: Options = {}): ParseResult {
     const bracketDetail = line[0] === "[" ? /^\[([^\]]+)\](?:\s*@\s*(.+))?$/.exec(line) : null;
     if (bracketDetail) {
       duplicate("ability");
-      pokemon.ability = bracketDetail[1]!.trim();
+      const ability = bracketDetail[1]!.trim();
+      if (id(ability) === "selectability") delete pokemon.ability;
+      else pokemon.ability = ability;
       if (bracketDetail[2]) {
         duplicate("item");
-        if (/^No Item$/i.test(bracketDetail[2])) delete pokemon.item;
+        if (id(bracketDetail[2]) === "noitem") delete pokemon.item;
         else pokemon.item = bracketDetail[2].trim();
       }
       continue;
@@ -238,34 +251,56 @@ export function parse(input: string, options: Options = {}): ParseResult {
       move(value);
       continue;
     }
-    if (key === "evs" || key === "ivs") {
-      duplicate(key);
+    const spread = spreads.get(key);
+    if (spread) {
+      duplicate(spread);
       const values: Stats = {};
+      const modifiable = spread !== "ivs";
+      const [max, budget] = spreadRanges[spread];
       let conflictingModifiers = false;
-      if (key === "evs") {
+      let entries = value;
+      let namedNature: string | undefined;
+      if (modifiable) {
         increased = undefined;
         decreased = undefined;
         if (!explicitNature) delete pokemon.nature;
+        // Showdown's beta client appends the nature, as in `252+ Def / - Atk (Bold)`.
+        const suffix = /\s*\(([^()]*)\)$/.exec(entries);
+        if (suffix) {
+          namedNature = suffix[1]!.trim() || undefined;
+          entries = entries.slice(0, suffix.index);
+        }
       }
-      for (const entry of value.split("/")) {
+      for (const entry of entries.split("/")) {
         const match =
-          /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)([+-]?)\s+([a-z .]+)\s*$/i.exec(entry);
-        const statName = match?.[3]!.toLowerCase().replace(/[ .]/g, "");
+          /^\s*(?:([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)([+-]?)|([+-]))\s+([a-z .]+)\s*$/i.exec(
+            entry,
+          );
+        const statName = match?.[4]!.toLowerCase().replace(/[ .]/g, "");
         const stat = statName && Object.hasOwn(stats, statName) ? stats[statName] : undefined;
-        if (!match || !stat || !Number.isFinite(Number(match[1]))) {
-          warn("invalid-stat", `Invalid ${key} entry: ${entry.trim()}`);
+        const modifier = match?.[2] || match?.[3];
+        if (!match || !stat || (match[1] !== undefined && !Number.isFinite(Number(match[1])))) {
+          warn("invalid-stat", `Invalid ${spread} entry: ${entry.trim()}`);
           continue;
         }
-        if (values[stat] !== undefined)
-          warn("duplicate-stat", `Repeated ${stat}; the last value takes precedence`);
-        values[stat] = Number(match[1]);
-        const max = key === "ivs" ? 31 : 255;
-        if (!Number.isInteger(values[stat]) || values[stat]! < 0 || values[stat]! > max)
-          warn("stat-range", `${stat} is outside the traditional ${key} range; value preserved`);
-        if (match[2]) {
-          if (key !== "evs" || stat === "hp")
-            warn("invalid-nature-modifier", "Nature modifiers apply only to non-HP EVs");
-          else if (match[2] === "+") {
+        // A bare `- Atk` only marks the decreased nature stat, without a value.
+        if (match[1] !== undefined) {
+          if (values[stat] !== undefined)
+            warn("duplicate-stat", `Repeated ${stat}; the last value takes precedence`);
+          values[stat] = Number(match[1]);
+          if (!Number.isInteger(values[stat]) || values[stat]! < 0 || values[stat]! > max)
+            warn(
+              "stat-range",
+              `${stat} is outside the traditional ${spread} range; value preserved`,
+            );
+        }
+        if (modifier) {
+          if (!modifiable || stat === "hp")
+            warn(
+              "invalid-nature-modifier",
+              "Nature modifiers apply only to non-HP EVs or stat points",
+            );
+          else if (modifier === "+") {
             if (increased) {
               conflictingModifiers = true;
               warn("invalid-nature-modifier", "More than one increased stat");
@@ -280,15 +315,21 @@ export function parse(input: string, options: Options = {}): ParseResult {
           }
         }
       }
-      pokemon[key] = values;
-      if (key === "evs" && Object.values(values).reduce((sum, number) => sum + number, 0) > 510)
-        warn("ev-total", "EV total exceeds 510; values preserved");
-      if (key === "evs" && increased && increased === decreased) {
+      pokemon[spread] = values;
+      if (Object.values(values).reduce((sum, number) => sum + number, 0) > budget)
+        warn(
+          spread === "evs" ? "ev-total" : "sp-total",
+          `${spread === "evs" ? "EV" : "Stat point"} total exceeds ${budget}; values preserved`,
+        );
+      if (!modifiable) continue;
+      if (increased && increased === decreased) {
         conflictingModifiers = true;
         warn("invalid-nature-modifier", "The same stat cannot be increased and decreased");
       }
-      if (key === "evs" && !explicitNature && !conflictingModifiers && increased && decreased)
+      if (explicitNature) continue;
+      if (!conflictingModifiers && increased && decreased)
         pokemon.nature = natures[natureStats.indexOf(increased)]![natureStats.indexOf(decreased)]!;
+      else if (namedNature) pokemon.nature = namedNature;
       continue;
     }
     const numberKey = numericFields.get(key);
@@ -326,7 +367,7 @@ export function parse(input: string, options: Options = {}): ParseResult {
         warn("empty-field", `Empty ${key}`);
         continue;
       }
-      if (stringKey === "item" && /^No Item$/i.test(value)) delete pokemon.item;
+      if (stringKey === "item" && id(value) === "noitem") delete pokemon.item;
       else pokemon[stringKey] = value;
       if (stringKey === "hpType") explicitHpType = true;
       continue;

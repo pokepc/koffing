@@ -33,6 +33,7 @@ const setKeys = new Set<string>([
   "gender",
   "evs",
   "ivs",
+  "sps",
   "moves",
 ]);
 
@@ -191,7 +192,8 @@ function readSet(
         result.gender = entry;
         break;
       case "evs":
-      case "ivs": {
+      case "ivs":
+      case "sps": {
         const statPath = `${path}.${key}`;
         const values: Stats = {};
         for (const rawStat of objectKeys(entry, statPath, limits)) {
@@ -309,16 +311,23 @@ function checkRanges(
     range(set.happiness, 0, 255, "happiness");
     range(set.dynamaxLevel, 0, 10, "dynamaxLevel");
     let evTotal = 0;
+    let spTotal = 0;
     for (const stat of stats) {
       const ev = set.evs?.[stat];
       const iv = set.ivs?.[stat];
+      const sp = set.sps?.[stat];
       if (ev !== undefined) {
         evTotal += ev;
         range(ev, 0, 255, `evs.${stat}`, "stat-range");
       }
       if (iv !== undefined) range(iv, 0, 31, `ivs.${stat}`, "stat-range");
+      if (sp !== undefined) {
+        spTotal += sp;
+        range(sp, 0, 32, `sps.${stat}`, "stat-range");
+      }
     }
     if (evTotal > 510) add("ev-total", `${prefix}.evs`, "Traditional EV total exceeds 510");
+    if (spTotal > 66) add("sp-total", `${prefix}.sps`, "Stat point total exceeds 66");
     if (set.moves.length > 4)
       add("move-count", `${prefix}.moves`, "Traditional sets contain at most four moves");
   }
@@ -365,10 +374,15 @@ export function sanitizeTeam(
     if (set.dynamaxLevel !== undefined)
       set.dynamaxLevel = clamp(set.dynamaxLevel, 0, 10, `${path}.dynamaxLevel`);
     let evBudget = 510;
+    let spBudget = 66;
     for (const stat of stats) {
       if (set.evs?.[stat] !== undefined) {
         set.evs[stat] = clamp(set.evs[stat], 0, Math.min(255, evBudget), `${path}.evs.${stat}`);
         evBudget -= set.evs[stat];
+      }
+      if (set.sps?.[stat] !== undefined) {
+        set.sps[stat] = clamp(set.sps[stat], 0, Math.min(32, spBudget), `${path}.sps.${stat}`);
+        spBudget -= set.sps[stat];
       }
       if (set.ivs?.[stat] !== undefined)
         set.ivs[stat] = clamp(set.ivs[stat], 0, 31, `${path}.ivs.${stat}`);

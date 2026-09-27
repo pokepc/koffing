@@ -60,6 +60,7 @@ function serializeSet(set: PokemonSet): string {
     if (entries) append(label, entries);
   };
   appendStats("EVs", set.evs);
+  appendStats("SPs", set.sps);
   if (set.nature) output += `\n${set.nature} Nature`;
   appendStats("IVs", set.ivs);
   for (const move of set.moves) {

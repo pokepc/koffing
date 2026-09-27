@@ -39,7 +39,7 @@ Nickname (Species) (F) [Ability] @ Item
 
 - Gender suffixes are uppercase `(M)`, `(F)`, or `(N)`.
 - A trailing `[Ability]` is an alternative to an `Ability:` detail line.
-- The item separator is `@`, with spaces. `@ No Item` leaves the item absent.
+- The item separator is `@`, with spaces. `@ No Item` and the Showdown client's `@ (no item)` leave the item absent, and its `[(select ability)]` placeholder leaves the ability absent.
 - `Type: Null` is supported as a species, including in a nickname header.
 - A blank line or a line containing only three or more hyphens ends the current Pokémon. Use a separator before the next Pokémon header; a blank line inside a set ends that set too.
 - LF, CRLF, and CR line endings are accepted. Lines are trimmed and tabs become spaces.
@@ -60,25 +60,26 @@ A team header starts a new team, even without a preceding blank line. The format
 
 These are all fields in `PokemonSet`. JSON keys are case-sensitive. Text detail labels and the `Nature` suffix are case-insensitive; names and other string values retain their spelling. Text aliases do not become additional JSON keys.
 
-| JSON field     | Type                         | Text syntax / aliases                                 | Behavior                                                                                                                    |
-| -------------- | ---------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `species`      | `string`                     | Pokémon header; `Species: Koffing`                    | Required, nonempty in JSON. A `Species:` override after a header reports a repeated field.                                  |
-| `name`         | `string`                     | `Smogon (Koffing)`; `Nickname: Smogon`                | Optional nickname, not the species.                                                                                         |
-| `item`         | `string`                     | `Koffing @ Eviolite`; `Item: Eviolite`                | `No Item` in text removes the item.                                                                                         |
-| `ability`      | `string`                     | `Ability: Levitate`; `Trait: Levitate`; `[Levitate]`  | Brackets work in the header or on a detail line. A detail line can also be `[Levitate] @ Eviolite`.                         |
-| `gender`       | `"M"`, `"F"`, `"N"`, or `""` | Header suffix; `Gender: F`; empty `Gender:`           | Values must be uppercase or empty. Export uses suffixes for M/F and detail lines for N/empty.                               |
-| `moves`        | `string[]`                   | `- Sludge Bomb`; `~ Sludge Bomb`; `Move: Sludge Bomb` | Required in JSON; may be `[]`. Text starts with an empty list and appends each move in order. Empty move names are invalid. |
-| `nature`       | `string`                     | `Bold Nature`                                         | `Nature: Bold` is not supported. Can also be inferred from EV modifiers.                                                    |
-| `evs`          | `Stats`                      | `EVs: 252 HP / 252 Def / 4 SpD`                       | Sparse stat table. Traditional integer range: 0–255 per stat, total at most 510.                                            |
-| `ivs`          | `Stats`                      | `IVs: 0 Atk / 31 Spe`                                 | Sparse stat table. Traditional integer range: 0–31 per stat.                                                                |
-| `level`        | `number`                     | `Level: 50`                                           | Traditional integer range: 1–100.                                                                                           |
-| `shiny`        | `boolean`                    | `Shiny: Yes`; bare `Shiny`                            | Accepts Yes/No/true/false, case-insensitively. Bare flag means true.                                                        |
-| `happiness`    | `number`                     | `Happiness: 200`; `Friendship: 200`                   | Traditional integer range: 0–255. Text move `Frustration` infers 0 unless explicitly set.                                   |
-| `pokeball`     | `string`                     | `Pokeball: Poke Ball`; `Ball: Poke Ball`              | Ball name is retained as text.                                                                                              |
-| `hpType`       | `string`                     | `Hidden Power: Ice`                                   | Also inferred from bracketed Hidden Power moves in text; see below.                                                         |
-| `dynamaxLevel` | `number`                     | `Dynamax Level: 10`                                   | Traditional integer range: 0–10.                                                                                            |
-| `gigantamax`   | `boolean`                    | `Gigantamax: Yes`; bare `Gigantamax`                  | Same boolean syntax as `Shiny`.                                                                                             |
-| `teraType`     | `string`                     | `Tera Type: Poison`                                   | Type name is retained as text.                                                                                              |
+| JSON field     | Type                         | Text syntax / aliases                                 | Behavior                                                                                                                                                                                |
+| -------------- | ---------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `species`      | `string`                     | Pokémon header; `Species: Koffing`                    | Required, nonempty in JSON. A `Species:` override after a header reports a repeated field.                                                                                              |
+| `name`         | `string`                     | `Smogon (Koffing)`; `Nickname: Smogon`                | Optional nickname, not the species.                                                                                                                                                     |
+| `item`         | `string`                     | `Koffing @ Eviolite`; `Item: Eviolite`                | `No Item` in text removes the item.                                                                                                                                                     |
+| `ability`      | `string`                     | `Ability: Levitate`; `Trait: Levitate`; `[Levitate]`  | Brackets work in the header or on a detail line. A detail line can also be `[Levitate] @ Eviolite`.                                                                                     |
+| `gender`       | `"M"`, `"F"`, `"N"`, or `""` | Header suffix; `Gender: F`; empty `Gender:`           | Values must be uppercase or empty. Export uses suffixes for M/F and detail lines for N/empty.                                                                                           |
+| `moves`        | `string[]`                   | `- Sludge Bomb`; `~ Sludge Bomb`; `Move: Sludge Bomb` | Required in JSON; may be `[]`. Text starts with an empty list and appends each move in order. A bare `-` or `~` is the client's empty slot and is skipped; an empty `Move:` is invalid. |
+| `nature`       | `string`                     | `Bold Nature`                                         | `Nature: Bold` is not supported. Can also be inferred from EV modifiers.                                                                                                                |
+| `evs`          | `Stats`                      | `EVs: 252 HP / 252 Def / 4 SpD`                       | Sparse stat table. Traditional integer range: 0–255 per stat, total at most 510.                                                                                                        |
+| `ivs`          | `Stats`                      | `IVs: 0 Atk / 31 Spe`                                 | Sparse stat table. Traditional integer range: 0–31 per stat.                                                                                                                            |
+| `sps`          | `Stats`                      | `SPs: 32 Atk / 32 Spe / 2 HP`; `SP:`; `Stat Points:`  | Pokémon Champions stat points. Sparse stat table. Integer range: 0–32 per stat, total at most 66. Never converted to EVs.                                                               |
+| `level`        | `number`                     | `Level: 50`                                           | Traditional integer range: 1–100.                                                                                                                                                       |
+| `shiny`        | `boolean`                    | `Shiny: Yes`; bare `Shiny`                            | Accepts Yes/No/true/false, case-insensitively. Bare flag means true.                                                                                                                    |
+| `happiness`    | `number`                     | `Happiness: 200`; `Friendship: 200`                   | Traditional integer range: 0–255. Text move `Frustration` infers 0 unless explicitly set.                                                                                               |
+| `pokeball`     | `string`                     | `Pokeball: Poke Ball`; `Ball: Poke Ball`              | Ball name is retained as text.                                                                                                                                                          |
+| `hpType`       | `string`                     | `Hidden Power: Ice`                                   | Also inferred from bracketed Hidden Power moves in text; see below.                                                                                                                     |
+| `dynamaxLevel` | `number`                     | `Dynamax Level: 10`                                   | Traditional integer range: 0–10.                                                                                                                                                        |
+| `gigantamax`   | `boolean`                    | `Gigantamax: Yes`; bare `Gigantamax`                  | Same boolean syntax as `Shiny`.                                                                                                                                                         |
+| `teraType`     | `string`                     | `Tera Type: Poison`                                   | Type name is retained as text.                                                                                                                                                          |
 
 All fields except `species` and `moves` are optional. Missing values remain absent: Koffing does not fill in level 100, IVs of 31, EVs of 0, false flags, or generation-specific defaults. The text inferences described here are exceptions. JSON import validates and copies fields without performing those text inferences.
 
@@ -103,7 +104,15 @@ Text stat labels ignore case, spaces, and periods, so `Sp. Atk` also works. Sepa
 EVs: 252+ SpA / 4 SpD / 252- Atk
 ```
 
-A trailing `+` or `-` on an EV number marks the increased or decreased nature stat. One of each on distinct non-HP stats infers the nature (`Modest` here). An explicit `Modest Nature` line takes precedence regardless of order. Incomplete modifier pairs do not infer a nature; conflicting modifiers, HP modifiers, and modifiers on IVs produce diagnostics.
+A trailing `+` or `-` on an EV or stat point number marks the increased or decreased nature stat. One of each on distinct non-HP stats infers the nature (`Modest` here). An explicit `Modest Nature` line takes precedence regardless of order. Incomplete modifier pairs do not infer a nature; conflicting modifiers, HP modifiers, and modifiers on IVs produce diagnostics. When a set has both an `EVs:` and an `SPs:` line, the last one determines the inferred nature.
+
+```text
+EVs: 248 HP / - Atk / 252+ Def / 8 SpD (Bold)
+```
+
+This is the Showdown beta client's form. A modifier without a number, such as `- Atk`, marks the stat without giving it a value. A parenthesized nature at the end of the line is used only when the modifiers do not infer one, which covers neutral natures.
+
+Showdown's own Champions formats store stat points on the `EVs:` line, because its sets have no separate field. Koffing does not know the format of a headerless set, so it reads that line as `evs`; a caller that knows the team is for Champions should move the values to `sps`.
 
 ### Hidden Power and happiness inference
 

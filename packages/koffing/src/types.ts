@@ -12,6 +12,8 @@ export interface PokemonSet {
   nature?: string;
   evs?: Stats;
   ivs?: Stats;
+  /** Pokémon Champions stat points, which replace EVs there. */
+  sps?: Stats;
   level?: number;
   shiny?: boolean;
   happiness?: number;
